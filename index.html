@@ -75,36 +75,34 @@ svg{width:100%;height:auto;display:block}
 
 /* Goals */
 .goals-card{background:var(--card);border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px var(--shadow)}
-.goal-item{margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.goal-item{margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--line);position:relative}
 .goal-item:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.goal-img{width:100%;height:120px;object-fit:cover;border-radius:12px;margin-bottom:10px;background:var(--bg)}
 .goal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .goal-name{font-weight:600;font-size:15px}
 .goal-del{border:none;background:transparent;color:var(--red);font-size:18px;padding:0 4px}
 .goal-progress{height:8px;background:var(--bg);border-radius:99px;overflow:hidden;margin-bottom:6px}
 .goal-bar{height:100%;background:var(--green);border-radius:99px;transition:width .3s}
 .goal-stats{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
-.goal-add-form{display:flex;gap:8px;margin-top:12px}
-.goal-add-form input{flex:1;padding:10px;font-size:14px}
-.goal-add-form button{background:var(--yellow);color:#000;border:none;border-radius:10px;padding:10px 16px;font-weight:600;font-size:14px}
+.goal-add-form{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.goal-add-form input{padding:10px;font-size:14px}
+.goal-add-form .full{grid-column:1/-1}
+.goal-add-form button{background:var(--yellow);color:#000;border:none;border-radius:10px;padding:10px 16px;font-weight:600;font-size:14px;grid-column:1/-1}
+.file-input-wrap{position:relative;overflow:hidden;display:inline-block;width:100%}
+.file-input-wrap input[type=file]{position:absolute;left:0;top:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.file-input-wrap .btn{background:var(--bg);border:1px dashed var(--line);border-radius:10px;padding:10px;text-align:center;color:var(--muted);font-size:13px}
 
-/* Calendar */
-.calendar-card{background:var(--card);border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px var(--shadow)}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:12px}
-.cal-day{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);border-radius:8px;font-size:12px;position:relative}
-.cal-day.has-income{background:rgba(48,209,88,.15);border:1px solid var(--green)}
-.cal-day-num{font-weight:600;font-size:13px}
-.cal-day-sum{font-size:9px;color:var(--green);font-weight:700;margin-top:2px}
-.cal-weekday{font-size:10px;color:var(--muted);text-align:center;padding:4px 0}
-.cal-legend{display:flex;gap:12px;margin-top:12px;font-size:11px;color:var(--muted)}
-.cal-legend span{display:flex;align-items:center;gap:4px}
-.cal-legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
-
-/* Schedule Form */
-.schedule-form{background:var(--card);border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px var(--shadow)}
-.schedule-form h3{font-size:14px;margin-bottom:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-.schedule-row{display:flex;gap:8px;margin-bottom:8px;align-items:center}
-.schedule-row input,.schedule-row select{flex:1;padding:10px;font-size:14px}
-.schedule-row button{background:var(--red);color:#fff;border:none;border-radius:8px;width:32px;height:32px;font-size:16px}
+/* Schedule List */
+.schedule-card{background:var(--card);border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px var(--shadow)}
+.schedule-form-row{display:grid;grid-template-columns:1fr 70px 90px 40px;gap:8px;margin-bottom:12px}
+.schedule-form-row input,.schedule-form-row select{padding:10px;font-size:14px}
+.schedule-form-row button{background:var(--yellow);color:#000;border:none;border-radius:8px;font-weight:700;font-size:18px}
+.schedule-item{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.schedule-item:last-child{border-bottom:none}
+.schedule-info{display:flex;flex-direction:column;gap:2px}
+.schedule-day{font-weight:700;font-size:15px;color:var(--yellow)}
+.schedule-cat{font-size:13px;color:var(--muted)}
+.schedule-amt{font-weight:700;color:var(--green);font-variant-numeric:tabular-nums}
 
 /* Bottom Nav */
 .nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid var(--line);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -2px 10px var(--shadow)}
@@ -173,10 +171,18 @@ svg{width:100%;height:auto;display:block}
     <div class="goals-card">
       <div class="section-title" style="margin-top:0">Цели накоплений</div>
       <div id="goals-list"></div>
+    </div>
+
+    <div class="goals-card">
+      <div class="section-title" style="margin-top:0">Создать цель</div>
       <div class="goal-add-form">
         <input id="goalName" placeholder="Название цели">
         <input id="goalTarget" inputmode="decimal" placeholder="Цель, ₽">
-        <button onclick="addGoal()">+</button>
+        <div class="file-input-wrap full">
+          <div class="btn" id="goalImgLabel">📷 Прикрепить фото (необязательно)</div>
+          <input type="file" id="goalImg" accept="image/*" onchange="previewGoalImg(this)">
+        </div>
+        <button onclick="addGoal()">Создать цель</button>
       </div>
     </div>
 
@@ -190,27 +196,21 @@ svg{width:100%;height:auto;display:block}
     </div>
   </div>
 
-  <!-- TAB 4: CALENDAR -->
-  <div id="tab-calendar" class="tab-content">
-    <div class="schedule-form">
-      <h3>📅 Расписание поступлений</h3>
-      <div class="schedule-row">
+  <!-- TAB 4: SCHEDULE -->
+  <div id="tab-schedule" class="tab-content">
+    <div class="schedule-card">
+      <div class="section-title" style="margin-top:0">Добавить выплату</div>
+      <div class="schedule-form-row">
         <select id="schedCat"></select>
-        <input id="schedDay" type="number" min="1" max="31" placeholder="День (1-31)">
-        <input id="schedAmount" inputmode="decimal" placeholder="Сумма, ₽">
+        <input id="schedDay" type="number" min="1" max="31" placeholder="День">
+        <input id="schedAmount" inputmode="decimal" placeholder="Сумма">
         <button onclick="addSchedule()">+</button>
       </div>
-      <div id="schedule-list" style="margin-top:12px"></div>
     </div>
 
-    <div class="calendar-card">
-      <div class="section-title" style="margin-top:0">Календарь поступлений</div>
-      <div class="cal-grid" id="cal-weekdays"></div>
-      <div class="cal-grid" id="cal-grid"></div>
-      <div class="cal-legend">
-        <span><i style="background:var(--green)"></i> Есть поступление</span>
-        <span><i style="background:var(--muted)"></i> Пусто</span>
-      </div>
+    <div class="schedule-card">
+      <div class="section-title" style="margin-top:0">Мои выплаты по дням</div>
+      <div id="schedule-list"></div>
     </div>
   </div>
 </div>
@@ -229,9 +229,9 @@ svg{width:100%;height:auto;display:block}
     <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
     Цели
   </button>
-  <button onclick="switchTab('calendar',this)">
-    <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
-    Календарь
+  <button onclick="switchTab('schedule',this)">
+    <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+    Выплаты
   </button>
 </nav>
 
@@ -241,20 +241,21 @@ const CATS = {
   out: {'Продукты':'🛒','Жильё и ЖКХ':'🏠','Транспорт':'🚌','Связь':'📱','Кафе':'🍔','Развлечения':'🎬','Здоровье':'💊','Одежда':'👕','Покупка бумаг':'📥','Прочее':'📦'}
 };
 const PASSIVE_CATS = ['Купоны облигаций','Дивиденды','Проценты и вклады'];
-let data = JSON.parse(localStorage.getItem('fin_v3') || '[]');
-let goals = JSON.parse(localStorage.getItem('fin_goals') || '[]');
-let schedule = JSON.parse(localStorage.getItem('fin_schedule') || '[]');
+let data = JSON.parse(localStorage.getItem('fin_v4') || '[]');
+let goals = JSON.parse(localStorage.getItem('fin_goals_v2') || '[]');
+let schedule = JSON.parse(localStorage.getItem('fin_schedule_v2') || '[]');
 let type = 'out';
 let currentTheme = localStorage.getItem('fin_theme') || 'dark';
+let tempGoalImg = null;
 
 const $ = id => document.getElementById(id);
 const fmt = n => new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n) + ' ₽';
 const today = () => new Date().toISOString().slice(0,10);
 
 function save() {
-  localStorage.setItem('fin_v3', JSON.stringify(data));
-  localStorage.setItem('fin_goals', JSON.stringify(goals));
-  localStorage.setItem('fin_schedule', JSON.stringify(schedule));
+  localStorage.setItem('fin_v4', JSON.stringify(data));
+  localStorage.setItem('fin_goals_v2', JSON.stringify(goals));
+  localStorage.setItem('fin_schedule_v2', JSON.stringify(schedule));
 }
 
 // --- Theme ---
@@ -310,7 +311,7 @@ function switchTab(tab, btn) {
   btn.classList.add('active');
   if (tab === 'analytics') renderAnalytics();
   if (tab === 'goals') renderGoals();
-  if (tab === 'calendar') renderCalendar();
+  if (tab === 'schedule') renderSchedule();
 }
 
 // --- Render Operations Tab ---
@@ -418,16 +419,41 @@ function renderChart() {
     </svg>`;
 }
 
-// --- Goals ---
+// --- Goals with Images ---
+function previewGoalImg(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      tempGoalImg = e.target.result;
+      $('goalImgLabel').textContent = '✅ Фото выбрано';
+      $('goalImgLabel').style.borderColor = 'var(--green)';
+      $('goalImgLabel').style.color = 'var(--green)';
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
 function addGoal() {
   const name = $('goalName').value.trim();
   const target = parseFloat($('goalTarget').value.replace(',','.').replace(/\s/g,''));
   if (!name || !target || target <= 0) return alert('Заполните название и цель');
-  goals.push({ id: Date.now(), name, target, current: 0 });
+  
+  goals.push({ 
+    id: Date.now(), 
+    name, 
+    target, 
+    current: 0,
+    img: tempGoalImg || null
+  });
   save();
   renderGoals();
   $('goalName').value = '';
   $('goalTarget').value = '';
+  $('goalImg').value = '';
+  tempGoalImg = null;
+  $('goalImgLabel').textContent = '📷 Прикрепить фото (необязательно)';
+  $('goalImgLabel').style.borderColor = '';
+  $('goalImgLabel').style.color = '';
 }
 
 function addToGoal() {
@@ -450,11 +476,14 @@ function delGoal(id) {
 }
 
 function renderGoals() {
-  $('goalSelect').innerHTML = goals.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+  $('goalSelect').innerHTML = goals.length 
+    ? goals.map(g => `<option value="${g.id}">${g.name}</option>`).join('')
+    : '<option disabled>Нет целей</option>';
   
   $('goals-list').innerHTML = goals.length ? goals.map(g => {
     const pct = Math.min(100, Math.round(g.current / g.target * 100));
     return `<div class="goal-item">
+      ${g.img ? `<img src="${g.img}" class="goal-img" alt="${g.name}">` : ''}
       <div class="goal-header">
         <span class="goal-name">${g.name}</span>
         <button class="goal-del" onclick="delGoal(${g.id})">×</button>
@@ -468,7 +497,7 @@ function renderGoals() {
   }).join('') : '<div class="empty">Нет целей. Создайте первую!</div>';
 }
 
-// --- Calendar & Schedule ---
+// --- Schedule (List View) ---
 function addSchedule() {
   const cat = $('schedCat').value;
   const day = parseInt($('schedDay').value);
@@ -476,7 +505,7 @@ function addSchedule() {
   if (!cat || !day || day < 1 || day > 31 || !amount) return alert('Заполните все поля');
   schedule.push({ id: Date.now(), cat, day, amount });
   save();
-  renderCalendar();
+  renderSchedule();
   $('schedDay').value = '';
   $('schedAmount').value = '';
 }
@@ -484,58 +513,41 @@ function addSchedule() {
 function delSchedule(id) {
   schedule = schedule.filter(s => s.id !== id);
   save();
-  renderCalendar();
+  renderSchedule();
 }
 
-function renderCalendar() {
+function renderSchedule() {
   // Fill schedule categories
   $('schedCat').innerHTML = Object.keys(CATS.in).map(c => `<option>${c}</option>`).join('');
   
-  // Render schedule list
-  $('schedule-list').innerHTML = schedule.length ? schedule.map(s =>
-    `<div class="passive-row">
-      <span>${CATS.in[s.cat]||''} ${s.cat} · ${s.day}-е число</span>
-      <span style="display:flex;align-items:center;gap:8px">
-        <span class="green">+${fmt(s.amount)}</span>
-        <button class="del" onclick="delSchedule(${s.id})" style="font-size:16px">×</button>
-      </span>
+  // Sort by day
+  const sorted = [...schedule].sort((a,b) => a.day - b.day);
+  
+  // Calculate total monthly income
+  const total = sorted.reduce((s,x) => s + x.amount, 0);
+  
+  $('schedule-list').innerHTML = sorted.length ? 
+    `<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line)">
+      <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Всего за месяц</div>
+      <div style="font-size:20px;font-weight:700;color:var(--green)">+${fmt(total)}</div>
+    </div>` +
+    sorted.map(s =>
+    `<div class="schedule-item">
+      <div class="schedule-info">
+        <span class="schedule-day">${s.day}-е число</span>
+        <span class="schedule-cat">${CATS.in[s.cat]||''} ${s.cat}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="schedule-amt">+${fmt(s.amount)}</span>
+        <button class="del" onclick="delSchedule(${s.id})" style="font-size:18px">×</button>
+      </div>
     </div>`
-  ).join('') : '<div style="color:var(--muted);font-size:13px">Нет запланированных поступлений</div>';
-
-  // Render calendar grid
-  const weekdays = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-  $('cal-weekdays').innerHTML = weekdays.map(d => `<div class="cal-weekday">${d}</div>`).join('');
-  
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDay = new Date(year, month, 1).getDay();
-  const startOffset = firstDay === 0 ? 6 : firstDay - 1; // Monday start
-  
-  // Group schedule by day
-  const dayMap = {};
-  schedule.forEach(s => {
-    if (!dayMap[s.day]) dayMap[s.day] = 0;
-    dayMap[s.day] += s.amount;
-  });
-  
-  let cells = '';
-  for (let i = 0; i < startOffset; i++) cells += '<div class="cal-day"></div>';
-  for (let d = 1; d <= daysInMonth; d++) {
-    const sum = dayMap[d] || 0;
-    const hasIncome = sum > 0;
-    cells += `<div class="cal-day ${hasIncome ? 'has-income' : ''}">
-      <div class="cal-day-num">${d}</div>
-      ${hasIncome ? `<div class="cal-day-sum">+${(sum/1000).toFixed(0)}k</div>` : ''}
-    </div>`;
-  }
-  $('cal-grid').innerHTML = cells;
+  ).join('') : '<div class="empty">Нет запланированных выплат</div>';
 }
 
 // --- Export / Import ---
 function exportData() {
-  const backup = { data, goals, schedule, exported: today() };
+  const backup = { data, goals, schedule, exported: today(), version: 4 };
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}));
   a.download = 'finance-backup-' + today() + '.json';
@@ -559,6 +571,8 @@ function importData(inp) {
         // Old format compatibility
         if (confirm(`Заменить данные? (${backup.length} записей)`)) {
           data = backup;
+          goals = [];
+          schedule = [];
           save();
           renderAll();
         }
@@ -582,7 +596,7 @@ function renderAll() {
   renderOps();
   if ($('tab-analytics').classList.contains('active')) renderAnalytics();
   if ($('tab-goals').classList.contains('active')) renderGoals();
-  if ($('tab-calendar').classList.contains('active')) renderCalendar();
+  if ($('tab-schedule').classList.contains('active')) renderSchedule();
 }
 </script>
 </body>
