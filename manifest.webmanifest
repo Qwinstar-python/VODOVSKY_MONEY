@@ -1,0 +1,56 @@
+{
+  "id": "vodovsky-money",
+  "name": "VODOVSKY MONEY — личные финансы",
+  "short_name": "V MONEY",
+  "description": "Личный финансовый кабинет VODOVSKY GROUP: доходы, расходы, цели, капитал и расписание выплат.",
+  "lang": "ru",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "portrait-primary",
+  "background_color": "#080B10",
+  "theme_color": "#080B10",
+  "categories": ["finance", "productivity", "business"],
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Новая операция",
+      "short_name": "Операция",
+      "description": "Быстро записать доход или расход",
+      "url": "./?action=new-tx"
+    },
+    {
+      "name": "Операции",
+      "short_name": "Операции",
+      "description": "Список доходов и расходов",
+      "url": "./?view=transactions"
+    },
+    {
+      "name": "Цели",
+      "short_name": "Цели",
+      "description": "Накопления с фотографиями",
+      "url": "./?view=goals"
+    },
+    {
+      "name": "Кабинет",
+      "short_name": "Кабинет",
+      "description": "Профиль и настройки",
+      "url": "./?view=account"
+    }
+  ]
+}
