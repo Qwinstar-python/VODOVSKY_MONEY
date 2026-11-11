@@ -1,7 +1,7 @@
 /* ============================================================
-   VODOVSKY MONEY · app.js v3.0
-   Интерфейс, состояние, авторизация, личный кабинет,
-   операции, цели, выплаты, график капитала.
+   VODOVSKY MONEY · app.js v3.1
+   Полный интерфейс: авторизация, кабинет, операции, цели,
+   выплаты, график капитала, PWA-интеграция.
    ============================================================ */
 
 (function () {
@@ -11,20 +11,12 @@
   var CFG = window.VODOVSKY_CONFIG || {};
 
   var S = {
-    session: null,
-    user: null,
-    profile: null,
-    transactions: [],
-    goals: [],
-    payments: [],
-    route: 'dashboard',
-    days: 30,
+    session: null, user: null, profile: null,
+    transactions: [], goals: [], payments: [],
+    route: 'dashboard', days: 30,
     f: { q: '', type: 'all', cat: 'all', sort: 'date-desc' },
-    sel: [],
-    views: [],
-    activeView: null,
-    drawer: null,
-    loading: false,
+    sel: [], views: [], activeView: null,
+    drawer: null, loading: false,
     chart: { raf: 0, hover: -1, data: [], p: 1 }
   };
 
@@ -62,14 +54,14 @@
 
   var ECO = [
     { e: '💰', n: 'VODOVSKY Finance', d: 'Личные финансы: учёт, цели, капитал и выплаты.', live: true },
-    { e: '🧠', n: 'VODOVSKY Business', d: 'ИИ-инструменты для предпринимателей: счета, тексты, отчёты.' },
-    { e: '🧩', n: 'VODOVSKY Sites', d: 'Конструктор сайтов и лендингов без кода.' },
-    { e: '📣', n: 'VODOVSKY Marketing', d: 'Кампании, аналитика и креативы для роста.' },
-    { e: '🎨', n: 'VODOVSKY Studio', d: 'Дизайн и творческие инструменты на базе ИИ.' },
-    { e: '🎓', n: 'VODOVSKY Academy', d: 'Обучение цифровым навыкам и продуктам экосистемы.' }
+    { e: '🧠', n: 'VODOVSKY Business', d: 'ИИ-инструменты для предпринимателей.' },
+    { e: '🧩', n: 'VODOVSKY Sites', d: 'Конструктор сайтов без кода.' },
+    { e: '📣', n: 'VODOVSKY Marketing', d: 'Маркетинг и реклама.' },
+    { e: '🎨', n: 'VODOVSKY Studio', d: 'Дизайн и творческие инструменты.' },
+    { e: '🎓', n: 'VODOVSKY Academy', d: 'Обучение цифровым навыкам.' }
   ];
 
-  /* ---------- УТИЛИТЫ ---------- */
+  /* ==================== УТИЛИТЫ ==================== */
 
   function $(s) { return document.querySelector(s); }
   function $$(s) { return Array.prototype.slice.call(document.querySelectorAll(s)); }
@@ -84,7 +76,8 @@
   function fmt(n) {
     var cur = (S.profile && S.profile.currency) || (CFG.defaults && CFG.defaults.currency) || 'RUB';
     if (!NF[cur]) {
-      NF[cur] = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: cur, maximumFractionDigits: 0 });
+      try { NF[cur] = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: cur, maximumFractionDigits: 0 }); }
+      catch (e) { NF[cur] = { format: function (v) { return Math.round(v) + ' ₽'; } }; }
     }
     return NF[cur].format(Math.round(Number(n) || 0));
   }
@@ -100,13 +93,8 @@
   var MO = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
   var MF = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 
-  function iso(d) {
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  }
-  function piso(s) {
-    var p = String(s || '').split('-');
-    return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
-  }
+  function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function piso(s) { var p = String(s || '').split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
   function addd(d, n) { var x = new Date(d); x.setDate(x.getDate() + n); return x; }
   function today() { var d = new Date(); d.setHours(0, 0, 0, 0); return d; }
   function tiso() { return iso(today()); }
@@ -115,79 +103,47 @@
   function dbtw(a, b) { return Math.round((b - a) / 864e5); }
   function fd(s) { var d = piso(s); return d.getDate() + ' ' + MO[d.getMonth()]; }
   function fdf(s) { var d = piso(s); return d.getDate() + ' ' + MF[d.getMonth()] + ' ' + d.getFullYear(); }
-  function rel(s) {
-    var n = dbtw(piso(s), today());
-    if (n === 0) return 'сегодня';
-    if (n === 1) return 'вчера';
-    if (n === -1) return 'завтра';
-    return fd(s);
-  }
-  function deb(fn, ms) {
-    var h;
-    return function () {
-      var args = arguments, ctx = this;
-      clearTimeout(h);
-      h = setTimeout(function () { fn.apply(ctx, args); }, ms);
-    };
-  }
-  function ha(hex, a) {
-    var n = parseInt(String(hex).slice(1), 16);
-    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
-  }
+  function rel(s) { var n = dbtw(piso(s), today()); return n === 0 ? 'сегодня' : n === 1 ? 'вчера' : n === -1 ? 'завтра' : fd(s); }
+  function deb(fn, ms) { var h; return function () { var a = arguments, c = this; clearTimeout(h); h = setTimeout(function () { fn.apply(c, a); }, ms); }; }
+  function ha(hex, a) { var n = parseInt(String(hex).slice(1), 16); return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; }
   function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
   function has(id) { return S.sel.indexOf(id) >= 0; }
-  function initials(name, email) {
-    var base = String(name || email || 'V').trim();
-    var parts = base.split(/\s+/).filter(Boolean);
-    if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
-    return base.slice(0, 2).toUpperCase();
-  }
+  function ini(name, email) { var b = String(name || email || 'V').trim().split(/\s+/); return b.length > 1 ? (b[0][0] + b[1][0]).toUpperCase() : b[0].slice(0, 2).toUpperCase(); }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
 
-  /* ---------- ТОСТЫ / СТАТУС ---------- */
+  /* ==================== ТОСТЫ / СТАТУС ==================== */
 
   var UNDO = {};
   function toast(msg, icon, undo) {
+    var box = $('#toasts'); if (!box) return;
     var id = 't' + Date.now() + Math.random().toString(36).slice(2, 6);
-    var box = $('#toasts');
     var el = document.createElement('div');
-    el.className = 'toast';
-    el.id = id;
-    el.innerHTML =
-      '<span class="ti">' + (icon || '✓') + '</span>' +
-      '<span class="tmsg">' + esc(msg) + '</span>' +
+    el.className = 'toast'; el.id = id;
+    el.innerHTML = '<span class="ti">' + (icon || '✓') + '</span><span class="tmsg">' + esc(msg) + '</span>' +
       (undo ? '<button class="ta" data-action="undo" data-id="' + id + '">Отменить</button>' : '') +
       '<button class="tx" data-action="toast-close" data-id="' + id + '">✕</button>';
     if (undo) UNDO[id] = undo;
     box.appendChild(el);
     while (box.children.length > 3) box.firstChild.remove();
-    setTimeout(function () {
-      el.classList.add('out');
-      setTimeout(function () { el.remove(); }, 320);
-      delete UNDO[id];
-    }, undo ? 8000 : 3800);
+    setTimeout(function () { el.classList.add('out'); setTimeout(function () { el.remove(); }, 320); delete UNDO[id]; }, undo ? 8000 : 3800);
   }
 
   function sync(state, text) {
-    var el = $('#syncStatus');
-    if (!el) return;
+    var el = $('#syncStatus'); if (!el) return;
     el.className = 'sync ' + (state || '');
     el.innerHTML = '<i></i>' + esc(text || 'Синхронизировано');
   }
 
   function screen(name) {
-    ['boot', 'setupScreen', 'authScreen', 'appShell'].forEach(function (id) {
-      var el = $('#' + id);
-      if (el) el.hidden = true;
-    });
-    var target = $('#' + name);
-    if (target) target.hidden = false;
-    $('#mobileNav').hidden = name !== 'appShell';
-    $('#fab').hidden = name !== 'appShell';
-    if (name !== 'appShell') closeMenu();
+    ['boot', 'setupScreen', 'authScreen', 'appShell'].forEach(function (id) { var el = $('#' + id); if (el) el.hidden = true; });
+    var t = $('#' + name); if (t) t.hidden = false;
+    var mn = $('#mobileNav'), fb = $('#fab');
+    if (mn) mn.hidden = name !== 'appShell';
+    if (fb) fb.hidden = name !== 'appShell';
+    closeMenu();
   }
 
-  /* ---------- ТЕМA / НАВИГАЦИЯ ---------- */
+  /* ==================== ТЕМА / НАВИГАЦИЯ ==================== */
 
   function applyTheme() {
     var theme = (S.profile && S.profile.theme) || (CFG.defaults && CFG.defaults.theme) || 'dark';
@@ -205,74 +161,54 @@
   function updateChrome() {
     var name = (S.profile && S.profile.display_name) || (S.user && S.user.email) || 'Пользователь';
     var email = (S.profile && S.profile.email) || (S.user && S.user.email) || '';
-    var ini = initials(name, email);
-    $('#sideName').textContent = name;
-    $('#sideEmail').textContent = email;
-    $('#sideAvatar').textContent = ini;
-    $('#topAvatar').textContent = ini;
-    $('#navTxCount').textContent = S.transactions.length;
-    $('#navGoalCount').textContent = S.goals.length;
-    $('#navPayCount').textContent = S.payments.filter(function (p) { return p.active; }).length;
-
+    var av = ini(name, email);
+    var sn = $('#sideName'), se = $('#sideEmail'), sa = $('#sideAvatar'), ta = $('#topAvatar');
+    if (sn) sn.textContent = name;
+    if (se) se.textContent = email;
+    if (sa) sa.textContent = av;
+    if (ta) ta.textContent = av;
+    var tc = $('#navTxCount'), gc = $('#navGoalCount'), pc = $('#navPayCount');
+    if (tc) tc.textContent = S.transactions.length;
+    if (gc) gc.textContent = S.goals.length;
+    if (pc) pc.textContent = S.payments.filter(function (p) { return p.active; }).length;
     $$('.nav-btn').forEach(function (b) { b.classList.toggle('on', b.dataset.route === S.route); });
     $$('#mobileNav button').forEach(function (b) { b.classList.toggle('on', b.dataset.route === S.route); });
-
     var sec = SEC.filter(function (x) { return x.id === S.route; })[0] || SEC[0];
-    $('#pageTitle').textContent = sec.n;
-    $('#pageSub').textContent = sec.s;
+    var pt = $('#pageTitle'), ps = $('#pageSub');
+    if (pt) pt.textContent = sec.n;
+    if (ps) ps.textContent = sec.s;
   }
 
   function navigate(route) {
-    S.route = route;
-    S.sel = [];
-    closeDrawer();
-    closeMenu();
-    render();
+    S.route = route; S.sel = []; closeDrawer(); closeMenu(); render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    var v = $('#view');
-    if (v) v.focus({ preventScroll: true });
+    var v = $('#view'); if (v) v.focus({ preventScroll: true });
   }
 
-  function openMenu() {
-    var sb = $('.sidebar');
-    if (sb) sb.classList.add('open');
-    $('#menuScrim').hidden = false;
-  }
-  function closeMenu() {
-    var sb = $('.sidebar');
-    if (sb) sb.classList.remove('open');
-    var sc = $('#menuScrim');
-    if (sc) sc.hidden = true;
-  }
+  function openMenu() { var sb = $('.sidebar'); if (sb) sb.classList.add('open'); var sc = $('#menuScrim'); if (sc) sc.hidden = false; }
+  function closeMenu() { var sb = $('.sidebar'); if (sb) sb.classList.remove('open'); var sc = $('#menuScrim'); if (sc) sc.hidden = true; }
 
-  /* ---------- ЗАГРУЗКА / ОШИБКИ ---------- */
+  /* ==================== ЗАГРУЗКА ==================== */
 
   function skeleton() {
-    return '<div class="dash">' +
-      '<div class="skel skel-card" style="grid-column:span 4"></div>' +
+    return '<div class="dash"><div class="skel skel-card" style="grid-column:span 4"></div>' +
       '<div class="skel skel-card" style="grid-column:span 8"></div>' +
       '<div class="skel skel-card" style="grid-column:span 5"></div>' +
-      '<div class="skel skel-card" style="grid-column:span 7"></div>' +
-      '</div>';
+      '<div class="skel skel-card" style="grid-column:span 7"></div></div>';
   }
 
   function errorState(e) {
     var msg = D.errorMessage(e);
-    return '<div class="card"><div class="empty"><div class="ei">⚠️</div>' +
-      '<b>Не удалось загрузить кабинет</b>' +
-      '<p>' + esc(msg) + '</p>' +
-      '<button class="btn pri" data-action="retry">Попробовать снова</button>' +
-      '<button class="btn gho" data-action="logout" style="margin-top:8px">Выйти из аккаунта</button>' +
-      '</div></div>';
+    return '<div class="card"><div class="empty"><div class="ei">⚠️</div><b>Не удалось загрузить кабинет</b>' +
+      '<p>' + esc(msg) + '</p><button class="btn pri" data-action="retry">Попробовать снова</button>' +
+      '<button class="btn gho" data-action="logout" style="margin-top:8px">Выйти из аккаунта</button></div></div>';
   }
 
   async function enterApp(session) {
     if (S.loading) return;
-    S.loading = true;
-    S.session = session;
-    S.user = session.user;
+    S.loading = true; S.session = session; S.user = session.user;
     screen('appShell');
-    $('#view').innerHTML = skeleton();
+    var v = $('#view'); if (v) v.innerHTML = skeleton();
     sync('busy', 'Загрузка данных…');
     try {
       S.profile = await D.loadProfile(S.user);
@@ -280,25 +216,18 @@
       S.transactions = data.transactions;
       S.goals = await D.attachPhotos(data.goals);
       S.payments = data.payments;
-      loadViews();
-      applyTheme();
-      updateChrome();
-      render();
+      loadViews(); applyTheme(); updateChrome(); render();
       sync('', 'Синхронизировано');
-      toast('Добро пожаловать, ' + ((S.profile && S.profile.display_name) || 'в кабинет'), '👋');
     } catch (e) {
       sync('err', 'Ошибка загрузки');
-      $('#view').innerHTML = errorState(e);
-    } finally {
-      S.loading = false;
-    }
+      if (v) v.innerHTML = errorState(e);
+    } finally { S.loading = false; }
   }
 
   function resetState() {
     S.session = null; S.user = null; S.profile = null;
     S.transactions = []; S.goals = []; S.payments = [];
-    S.sel = []; S.views = []; S.activeView = null; S.drawer = null;
-    S.route = 'dashboard';
+    S.sel = []; S.views = []; S.activeView = null; S.drawer = null; S.route = 'dashboard';
     closeModal(); closeDrawer(); closeMenu();
   }
 
@@ -312,20 +241,10 @@
     try {
       D.init();
       var session = await D.getSession();
-      if (session) await enterApp(session);
-      else screen('authScreen');
-
+      if (session) await enterApp(session); else screen('authScreen');
       D.onAuthChange(function (event, sess) {
-        if (event === 'SIGNED_OUT' || !sess) {
-          resetState();
-          screen('authScreen');
-          return;
-        }
-        if (event === 'PASSWORD_RECOVERY') {
-          screen('appShell');
-          passwordRecoveryModal();
-          return;
-        }
+        if (event === 'SIGNED_OUT' || !sess) { resetState(); screen('authScreen'); return; }
+        if (event === 'PASSWORD_RECOVERY') { screen('appShell'); passwordRecoveryModal(); return; }
         if (sess && !S.user) enterApp(sess);
       });
     } catch (e) {
@@ -335,182 +254,105 @@
     }
   }
 
-  /* ---------- АВТОРИЗАЦИЯ ---------- */
+  /* ==================== АВТОРИЗАЦИЯ ==================== */
 
   function authTab(tab) {
     $$('[data-auth-tab]').forEach(function (b) {
       var on = b.dataset.authTab === tab;
-      b.classList.toggle('on', on);
-      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false');
     });
-    $('#loginForm').hidden = tab !== 'login';
-    $('#registerForm').hidden = tab !== 'register';
-    authMessage('', '');
+    var lf = $('#loginForm'), rf = $('#registerForm');
+    if (lf) lf.hidden = tab !== 'login';
+    if (rf) rf.hidden = tab !== 'register';
+    authMsg('', '');
   }
 
-  function authMessage(err, notice) {
+  function authMsg(err, notice) {
     var e = $('#authError'), n = $('#authNotice');
-    e.hidden = !err; e.textContent = err || '';
-    n.hidden = !notice; n.textContent = notice || '';
+    if (e) { e.hidden = !err; e.textContent = err || ''; }
+    if (n) { n.hidden = !notice; n.textContent = notice || ''; }
   }
 
   function busyBtn(btn, on, label) {
     if (!btn) return;
     btn.disabled = on;
-    if (on) {
-      btn.dataset.old = btn.innerHTML;
-      btn.innerHTML = '<span class="loader-inline"></span>' + (label || 'Подожди…');
-    } else {
-      btn.innerHTML = btn.dataset.old || btn.innerHTML;
-    }
+    if (on) { btn.dataset.old = btn.innerHTML; btn.innerHTML = '<span class="loader-inline"></span>' + (label || 'Подожди…'); }
+    else { btn.innerHTML = btn.dataset.old || btn.innerHTML; }
   }
 
   async function doLogin(e) {
-    e.preventDefault();
-    authMessage('', '');
-    var btn = $('#loginBtn');
-    busyBtn(btn, true, 'Входим…');
+    e.preventDefault(); authMsg('', '');
+    var btn = $('#loginBtn'); busyBtn(btn, true, 'Входим…');
     try {
       var res = await D.signIn($('#loginEmail').value, $('#loginPassword').value);
       if (res && res.session) await enterApp(res.session);
-    } catch (err) {
-      authMessage(D.errorMessage(err), '');
-    } finally {
-      busyBtn(btn, false);
-    }
+    } catch (err) { authMsg(D.errorMessage(err), ''); }
+    finally { busyBtn(btn, false); }
   }
 
   async function doRegister(e) {
-    e.preventDefault();
-    authMessage('', '');
-    var btn = $('#registerBtn');
-    busyBtn(btn, true, 'Создаём…');
+    e.preventDefault(); authMsg('', '');
+    var btn = $('#registerBtn'); busyBtn(btn, true, 'Создаём…');
     try {
-      var res = await D.signUp(
-        $('#regEmail').value,
-        $('#regPassword').value,
-        $('#regName').value
-      );
-      if (res && res.session) {
-        await enterApp(res.session);
-      } else {
-        authMessage('', 'Аккаунт создан. Проверь почту и подтверди email, затем войди.');
-        authTab('login');
-        $('#loginEmail').value = $('#regEmail').value;
-      }
-    } catch (err) {
-      authMessage(D.errorMessage(err), '');
-    } finally {
-      busyBtn(btn, false);
-    }
+      var res = await D.signUp($('#regEmail').value, $('#regPassword').value, $('#regName').value);
+      if (res && res.session) { await enterApp(res.session); }
+      else { authMsg('', 'Аккаунт создан. Проверь почту, подтверди email и войди.'); authTab('login'); var le = $('#loginEmail'); if (le) le.value = $('#regEmail').value; }
+    } catch (err) { authMsg(D.errorMessage(err), ''); }
+    finally { busyBtn(btn, false); }
   }
 
   async function doLogout() {
-    try {
-      sync('busy', 'Выходим…');
-      await D.signOut();
-    } catch (e) { /* локальная сессия всё равно очищена */ }
-    resetState();
-    applyTheme();
-    screen('authScreen');
-    toast('Ты вышел из аккаунта', '👋');
+    try { sync('busy', 'Выходим…'); await D.signOut(); } catch (e) {}
+    resetState(); applyTheme(); screen('authScreen'); toast('Ты вышел из аккаунта', '👋');
   }
 
   function forgotModal() {
-    openModal(
-      '<h2>Восстановление пароля</h2>' +
-      '<p class="msub">Введи email — Supabase пришлёт ссылку для смены пароля.</p>' +
-      '<form id="forgotForm"><div class="fld"><label>Email</label>' +
-      '<input id="forgotEmail" type="email" value="' + esc($('#loginEmail').value || '') + '" required>' +
-      '<div class="err">Введи корректный email</div></div>' +
-      '<div class="macts"><button type="button" class="btn gho" data-action="modal-close">Отмена</button>' +
-      '<button type="submit" class="btn pri">Отправить письмо</button></div></form>'
-    );
-    $('#forgotForm').onsubmit = async function (ev) {
-      ev.preventDefault();
-      var email = $('#forgotEmail').value.trim();
+    openModal('<h2>Восстановление пароля</h2><p class="msub">Введи email — Supabase пришлёт ссылку для смены пароля.</p>' +
+      '<form id="forgotForm"><div class="fld"><label>Email</label><input id="forgotEmail" type="email" value="' + esc(($('#loginEmail') || {}).value || '') + '" required><div class="err">Введи email</div></div>' +
+      '<div class="macts"><button type="button" class="btn gho" data-action="modal-close">Отмена</button><button type="submit" class="btn pri">Отправить письмо</button></div></form>');
+    var f = $('#forgotForm'); if (!f) return;
+    f.onsubmit = async function (ev) {
+      ev.preventDefault(); var email = $('#forgotEmail').value.trim();
       if (!email) { bad('#forgotEmail', 'Введи email'); return; }
-      try {
-        await D.resetPassword(email);
-        closeModal();
-        authMessage('', 'Письмо отправлено. Открой ссылку из письма, чтобы задать новый пароль.');
-      } catch (err) {
-        bad('#forgotEmail', D.errorMessage(err));
-      }
+      try { await D.resetPassword(email); closeModal(); authMsg('', 'Письмо отправлено. Открой ссылку из письма.'); }
+      catch (err) { bad('#forgotEmail', D.errorMessage(err)); }
     };
   }
 
   function passwordRecoveryModal() {
-    openModal(
-      '<h2>Новый пароль</h2><p class="msub">Придумай новый пароль для входа в кабинет.</p>' +
-      '<form id="recForm"><div class="fld"><label>Новый пароль</label>' +
-      '<input id="recPass" type="password" minlength="6" placeholder="Минимум 6 символов" required>' +
-      '<div class="err">Минимум 6 символов</div></div>' +
-      '<div class="macts"><button type="submit" class="btn pri wide">Сохранить пароль</button></div></form>'
-    );
-    $('#recForm').onsubmit = async function (ev) {
-      ev.preventDefault();
-      var pass = $('#recPass').value;
+    openModal('<h2>Новый пароль</h2><p class="msub">Придумай новый пароль для входа.</p>' +
+      '<form id="recForm"><div class="fld"><label>Новый пароль</label><input id="recPass" type="password" minlength="6" placeholder="Минимум 6 символов" required><div class="err">Минимум 6 символов</div></div>' +
+      '<div class="macts"><button type="submit" class="btn pri wide">Сохранить пароль</button></div></form>');
+    var f = $('#recForm'); if (!f) return;
+    f.onsubmit = async function (ev) {
+      ev.preventDefault(); var pass = $('#recPass').value;
       if (!pass || pass.length < 6) { bad('#recPass', 'Минимум 6 символов'); return; }
-      try {
-        await D.updatePassword(pass);
-        closeModal();
-        toast('Пароль обновлён', '🔐');
-        var sess = await D.getSession();
-        if (sess) await enterApp(sess);
-      } catch (err) {
-        bad('#recPass', D.errorMessage(err));
-      }
+      try { await D.updatePassword(pass); closeModal(); toast('Пароль обновлён', '🔐'); var sess = await D.getSession(); if (sess) await enterApp(sess); }
+      catch (err) { bad('#recPass', D.errorMessage(err)); }
     };
   }
 
-  /* ---------- ПРОИЗВОДНЫЕ ---------- */
+  /* ==================== ПРОИЗВОДНЫЕ ==================== */
 
-  function balance() {
-    return S.transactions.reduce(function (s, t) {
-      return s + (t.type === 'income' ? t.amount : -t.amount);
-    }, 0);
-  }
+  function balance() { return S.transactions.reduce(function (s, t) { return s + (t.type === 'income' ? t.amount : -t.amount); }, 0); }
 
   function mstat(off) {
-    var d = new Date();
-    d.setDate(1);
-    d.setMonth(d.getMonth() + (off || 0));
+    var d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + (off || 0));
     var k = mk(d), inc = 0, exp = 0;
-    S.transactions.forEach(function (t) {
-      if (String(t.date).slice(0, 7) === k) {
-        if (t.type === 'income') inc += t.amount; else exp += t.amount;
-      }
-    });
+    S.transactions.forEach(function (t) { if (String(t.date).slice(0, 7) === k) { if (t.type === 'income') inc += t.amount; else exp += t.amount; } });
     return { i: inc, e: exp };
   }
 
   function series(days) {
     var start = addd(today(), -(days - 1)), b = 0, map = {};
-    S.transactions.forEach(function (t) {
-      var v = t.type === 'income' ? t.amount : -t.amount;
-      if (piso(t.date) < start) b += v;
-      else map[t.date] = (map[t.date] || 0) + v;
-    });
-    var out = [];
-    for (var i = 0; i < days; i++) {
-      var k = iso(addd(start, i));
-      b += map[k] || 0;
-      out.push({ date: k, v: b });
-    }
-    return out;
+    S.transactions.forEach(function (t) { var v = t.type === 'income' ? t.amount : -t.amount; if (piso(t.date) < start) b += v; else map[t.date] = (map[t.date] || 0) + v; });
+    var out = []; for (var i = 0; i < days; i++) { var k = iso(addd(start, i)); b += map[k] || 0; out.push({ date: k, v: b }); } return out;
   }
 
   function breakdown() {
     var k = mk(new Date()), m = {};
-    S.transactions.forEach(function (t) {
-      if (t.type === 'expense' && String(t.date).slice(0, 7) === k) {
-        m[t.category] = (m[t.category] || 0) + t.amount;
-      }
-    });
-    return Object.keys(m).map(function (c) {
-      return { cat: CM[c] || CM.other, v: m[c] };
-    }).sort(function (a, b) { return b.v - a.v; });
+    S.transactions.forEach(function (t) { if (t.type === 'expense' && String(t.date).slice(0, 7) === k) m[t.category] = (m[t.category] || 0) + t.amount; });
+    return Object.keys(m).map(function (c) { return { cat: CM[c] || CM.other, v: m[c] }; }).sort(function (a, b) { return b.v - a.v; });
   }
 
   function pinfo(p) {
@@ -529,20 +371,18 @@
   function pct(g) { return g.target > 0 ? Math.max(0, Math.min(100, g.saved / g.target * 100)) : 0; }
   function goalCover(g) { return g.photo_url || ''; }
 
-  /* ---------- RENDER ---------- */
+  /* ==================== RENDER ==================== */
 
   function render() {
-    updateChrome();
-    var v = $('#view');
-    if (!v) return;
+    updateChrome(); var v = $('#view'); if (!v) return;
     if (S.route === 'dashboard') { v.innerHTML = dashboardHTML(); mountChart(); }
     else if (S.route === 'transactions') { v.innerHTML = txHTML(); bindTxTools(); renderTxList(); }
-    else if (S.route === 'goals') { v.innerHTML = goalsHTML(); }
-    else if (S.route === 'payments') { v.innerHTML = payHTML(); }
-    else { v.innerHTML = accountHTML(); }
+    else if (S.route === 'goals') v.innerHTML = goalsHTML();
+    else if (S.route === 'payments') v.innerHTML = payHTML();
+    else v.innerHTML = accountHTML();
   }
 
-  /* ---------- ОБЗОР ---------- */
+  /* ==================== ОБЗОР ==================== */
 
   function dashboardHTML() {
     var b = balance(), m = mstat(), pm = mstat(-1);
@@ -551,60 +391,32 @@
     var br = breakdown(), tot = br.reduce(function (s, x) { return s + x.v; }, 0);
     var diff = pm.e > 0 ? Math.round((m.e - pm.e) / pm.e * 100) : 0;
     var mo = MO[new Date().getMonth()];
-    var up = S.payments.filter(function (p) { return p.active; })
-      .map(function (p) { return { p: p, i: pinfo(p) }; })
-      .filter(function (x) { return x.i.st !== 'paid'; })
-      .sort(function (a, b2) { return a.i.due - b2.i.due; }).slice(0, 3);
+    var up = S.payments.filter(function (p) { return p.active; }).map(function (p) { return { p: p, i: pinfo(p) }; })
+      .filter(function (x) { return x.i.st !== 'paid'; }).sort(function (a, b2) { return a.i.due - b2.i.due; }).slice(0, 3);
     var gl = S.goals.slice().sort(function (a, b2) { return pct(b2) - pct(a); }).slice(0, 2);
 
     return '<div class="dash">' +
-      '<div class="banner rv">' +
-      '<div><span class="tag">VODOVSKY BUSINESS · СКОРО</span>' +
-      '<b>ИИ-инструменты для предпринимателей</b>' +
-      '<p>Счета, тексты и отчёты — в одной экосистеме с твоими финансами.</p></div>' +
-      '<div class="bact"><button class="dark-btn" data-action="ecosystem">Заглянуть в будущее</button>' +
-      '<button class="bx" data-action="hide-banner" aria-label="Скрыть">✕</button></div></div>' +
-
-      '<div class="hero rv" style="--d:.05s">' +
-      '<svg class="vm" viewBox="0 0 24 24"><path d="M4 4l8 16 8-16h-4.2L12 12.6 8.2 4H4z" fill="#161510"/></svg>' +
+      '<div class="banner rv"><div><span class="tag">VODOVSKY BUSINESS · СКОРО</span><b>ИИ-инструменты для предпринимателей</b><p>Счета, тексты и отчёты — в одной экосистеме.</p></div>' +
+      '<div class="bact"><button class="dark-btn" data-action="ecosystem">Заглянуть в будущее</button><button class="bx" data-action="hide-banner" aria-label="Скрыть">✕</button></div></div>' +
+      '<div class="hero rv" style="--d:.05s"><svg class="vm" viewBox="0 0 24 24"><path d="M4 4l8 16 8-16h-4.2L12 12.6 8.2 4H4z" fill="#161510"/></svg>' +
       '<span class="lbl">Общий баланс</span><div class="amt">' + fmt(b) + '</div>' +
-      '<span class="rate">' + (rate >= 0 ? '💪' : '📉') + ' В этом месяце сохраняешь ' + rate + '% дохода</span>' +
+      '<span class="rate">' + (rate >= 0 ? '💪' : '📉') + ' Сохраняешь ' + rate + '% дохода</span>' +
       '<div class="chips"><div class="chip"><span>Доходы · ' + mo + '</span><b>+' + fc(m.i) + ' ₽</b></div>' +
       '<div class="chip"><span>Расходы · ' + mo + '</span><b>−' + fc(m.e) + ' ₽</b></div></div>' +
-      '<div class="gs">🎯 В целях накоплено: <b>' + fmt(gs) + '</b>' +
-      (br[0] ? ' · топ трата: ' + br[0].cat.e + ' ' + br[0].cat.n : '') + '</div></div>' +
-
-      '<div class="card chartc rv" style="--d:.1s"><div class="ch"><h3>Капитал</h3>' +
-      '<span class="hint">' + (diff ? (diff < 0 ? 'расходы ниже прошлого месяца на ' + Math.abs(diff) + '%' : 'расходы выше прошлого месяца на ' + diff + '%') : 'динамика баланса') + '</span>' +
-      '<span class="sp"></span><div class="seg">' +
-      [7, 30, 90].map(function (d) {
-        return '<button class="' + (S.days === d ? 'on' : '') + '" data-action="chart-days" data-days="' + d + '">' + d + 'д</button>';
-      }).join('') +
+      '<div class="gs">🎯 В целях: <b>' + fmt(gs) + '</b>' + (br[0] ? ' · топ: ' + br[0].cat.e + ' ' + br[0].cat.n : '') + '</div></div>' +
+      '<div class="card chartc rv" style="--d:.1s"><div class="ch"><h3>Капитал</h3><span class="hint">' +
+      (diff ? (diff < 0 ? 'Расходы ниже на ' + Math.abs(diff) + '%' : 'Расходы выше на ' + diff + '%') : 'Динамика баланса') +
+      '</span><span class="sp"></span><div class="seg">' +
+      [7, 30, 90].map(function (d) { return '<button class="' + (S.days === d ? 'on' : '') + '" data-action="chart-days" data-days="' + d + '">' + d + 'д</button>'; }).join('') +
       '</div></div><div class="cwrap"><canvas id="capChart"></canvas><div class="tip" id="chartTip"></div>' +
-      (S.transactions.length ? '' : '<div class="cempty">Добавь первую операцию — график оживёт</div>') +
-      '</div></div>' +
-
+      (S.transactions.length ? '' : '<div class="cempty">Добавь первую операцию</div>') + '</div></div>' +
       '<div class="card dnut rv" style="--d:.15s"><div class="ch"><h3>Расходы по категориям</h3><span class="hint">этот месяц</span></div>' +
-      (tot ? donutHTML(br, tot) : '<div class="empty" style="padding:26px"><div class="ei">📊</div><b>Пока пусто</b><p>Расходы за месяц появятся здесь.</p></div>') +
-      '</div>' +
-
-      '<div class="card upc rv" style="--d:.2s"><div class="ch"><h3>Ближайшие выплаты</h3><span class="sp"></span>' +
-      '<button class="more" data-route="payments">Все →</button></div><div class="mlist">' +
-      (up.length ? up.map(function (x) {
-        var c = CM[x.p.category] || CM.other;
-        return '<div class="mpay"><span class="ic" style="background:' + ha(c.c, .15) + '">' + c.e + '</span>' +
-          '<div class="tx"><b>' + esc(x.p.title) + '</b><span>' + fd(iso(x.i.due)) + '</span></div>' +
-          '<span class="bdg ' + x.i.st + '">' + x.i.label + '</span><span class="a">' + fmt(x.p.amount) + '</span></div>';
-      }).join('') : '<div class="empty" style="padding:20px"><div class="ei">🗓️</div><b>Всё оплачено</b><p>Ближайших платежей нет.</p></div>') +
+      (tot ? donutHTML(br, tot) : '<div class="empty" style="padding:26px"><div class="ei">📊</div><b>Пока пусто</b></div>') + '</div>' +
+      '<div class="card upc rv" style="--d:.2s"><div class="ch"><h3>Ближайшие выплаты</h3><span class="sp"></span><button class="more" data-route="payments">Все →</button></div><div class="mlist">' +
+      (up.length ? up.map(function (x) { var c = CM[x.p.category] || CM.other; return '<div class="mpay"><span class="ic" style="background:' + ha(c.c, .15) + '">' + c.e + '</span><div class="tx"><b>' + esc(x.p.title) + '</b><span>' + fd(iso(x.i.due)) + '</span></div><span class="bdg ' + x.i.st + '">' + x.i.label + '</span><span class="a">' + fmt(x.p.amount) + '</span></div>'; }).join('') : '<div class="empty" style="padding:20px"><div class="ei">🗓️</div><b>Всё оплачено</b></div>') +
       '</div></div>' +
-
-      '<div class="card gmc rv" style="--d:.25s"><div class="ch"><h3>Цели</h3><span class="sp"></span>' +
-      '<button class="more" data-route="goals">Все →</button></div><div class="mlist">' +
-      (gl.length ? gl.map(function (g) {
-        return '<div class="mgoal"><div class="t">' + esc(g.title) + '<span>' + Math.round(pct(g)) + '%</span></div>' +
-          '<div class="bar' + (pct(g) >= 100 ? ' g' : '') + '"><i style="width:' + pct(g) + '%"></i></div></div>';
-      }).join('') + '<button class="btn gho sm" data-action="new-goal" style="width:100%">＋ Новая цель</button>' :
-        '<div class="empty" style="padding:20px"><div class="ei">🎯</div><b>Целей пока нет</b><button class="btn pri sm" data-action="new-goal">Создать цель</button></div>') +
+      '<div class="card gmc rv" style="--d:.25s"><div class="ch"><h3>Цели</h3><span class="sp"></span><button class="more" data-route="goals">Все →</button></div><div class="mlist">' +
+      (gl.length ? gl.map(function (g) { return '<div class="mgoal"><div class="t">' + esc(g.title) + '<span>' + Math.round(pct(g)) + '%</span></div><div class="bar' + (pct(g) >= 100 ? ' g' : '') + '"><i style="width:' + pct(g) + '%"></i></div></div>'; }).join('') + '<button class="btn gho sm" data-action="new-goal" style="width:100%">＋ Новая цель</button>' : '<div class="empty" style="padding:20px"><div class="ei">🎯</div><b>Целей пока нет</b><button class="btn pri sm" data-action="new-goal">Создать цель</button></div>') +
       '</div></div></div>';
   }
 
@@ -612,137 +424,61 @@
     var top = br.slice(0, 6), rest = br.slice(6).reduce(function (s, x) { return s + x.v; }, 0);
     var items = rest > 0 ? top.concat([{ cat: { n: 'Остальные', c: '#8E99B0', e: '📦' }, v: rest }]) : top;
     var R = 62, C = 2 * Math.PI * R, acc = 0;
-    var segs = items.map(function (x) {
-      var l = x.v / tot * C;
-      var s = '<circle cx="80" cy="80" r="' + R + '" fill="none" stroke="' + x.cat.c + '" stroke-width="17" stroke-dasharray="' + Math.max(l - 2, .5) + ' ' + (C - l + 2) + '" stroke-dashoffset="' + (-acc) + '"/>';
-      acc += l;
-      return s;
-    }).join('');
-    return '<div class="dflex"><div class="dbox"><svg viewBox="0 0 160 160">' + segs + '</svg>' +
-      '<div class="dc"><b>' + fc(tot) + ' ₽</b><span>расходы</span></div></div><div class="leg">' +
-      items.map(function (x) {
-        return '<div class="lrow"><i style="background:' + x.cat.c + '"></i>' +
-          '<span class="nm">' + (x.cat.e || '') + ' ' + x.cat.n + '</span>' +
-          '<b>' + fc(x.v) + ' ₽</b><span class="pc">' + Math.round(x.v / tot * 100) + '%</span></div>';
-      }).join('') + '</div></div>';
+    var segs = items.map(function (x) { var l = x.v / tot * C; var s = '<circle cx="80" cy="80" r="' + R + '" fill="none" stroke="' + x.cat.c + '" stroke-width="17" stroke-dasharray="' + Math.max(l - 2, .5) + ' ' + (C - l + 2) + '" stroke-dashoffset="' + (-acc) + '"/>'; acc += l; return s; }).join('');
+    return '<div class="dflex"><div class="dbox"><svg viewBox="0 0 160 160">' + segs + '</svg><div class="dc"><b>' + fc(tot) + ' ₽</b><span>расходы</span></div></div><div class="leg">' +
+      items.map(function (x) { return '<div class="lrow"><i style="background:' + x.cat.c + '"></i><span class="nm">' + (x.cat.e || '') + ' ' + x.cat.n + '</span><b>' + fc(x.v) + ' ₽</b><span class="pc">' + Math.round(x.v / tot * 100) + '%</span></div>'; }).join('') + '</div></div>';
   }
 
-  /* ---------- ГРАФИК ---------- */
+  /* ==================== ГРАФИК ==================== */
 
   function mountChart() {
-    var c = $('#capChart');
-    if (!c) return;
-    S.chart.data = series(S.days);
-    S.chart.hover = -1;
-    var W = c.parentElement.clientWidth, H = 238;
-    var dpr = Math.min(2, window.devicePixelRatio || 1);
-    var ctx = c.getContext('2d');
-    c.width = W * dpr; c.height = H * dpr; c.style.height = H + 'px';
+    var c = $('#capChart'); if (!c) return;
+    S.chart.data = series(S.days); S.chart.hover = -1;
+    var W = c.parentElement.clientWidth, H = 238, dpr = Math.min(2, window.devicePixelRatio || 1);
+    var ctx = c.getContext('2d'); c.width = W * dpr; c.height = H * dpr; c.style.height = H + 'px';
     var tip = $('#chartTip');
-
     function draw() {
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, W, H);
-      var s = S.chart.data, n = s.length;
-      if (!n) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+      var s = S.chart.data, n = s.length; if (!n) return;
       var pl = 50, pr = 14, pt = 14, pb = 26, pw = W - pl - pr, ph = H - pt - pb;
       var vals = s.map(function (o) { return o.v; });
       var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals);
-      if (mn === mx) { mn -= 1000; mx += 1000; }
-      var pad = (mx - mn) * .1; mn -= pad; mx += pad;
+      if (mn === mx) { mn -= 1000; mx += 1000; } var pad = (mx - mn) * .1; mn -= pad; mx += pad;
       function X(i) { return pl + (n > 1 ? i / (n - 1) : .5) * pw; }
       function Y(v) { return pt + (1 - (v - mn) / (mx - mn)) * ph; }
       var gl = cssVar('--ln2'), mu = cssVar('--fa'), ln = cssVar('--chart');
-
-      ctx.font = '600 10px Manrope,sans-serif';
-      ctx.fillStyle = mu; ctx.strokeStyle = gl; ctx.lineWidth = 1;
-      for (var g = 0; g <= 3; g++) {
-        var v = mn + (mx - mn) * g / 3, y = Y(v);
-        ctx.beginPath(); ctx.setLineDash([3, 5]);
-        ctx.moveTo(pl, y); ctx.lineTo(W - pr, y); ctx.stroke();
-        ctx.setLineDash([]); ctx.textAlign = 'right';
-        ctx.fillText(fc(v), pl - 8, y + 3);
-      }
-      ctx.textAlign = 'center';
-      var L = Math.min(5, n);
-      for (var l = 0; l < L; l++) {
-        var i = Math.round(L > 1 ? l * (n - 1) / (L - 1) : 0);
-        ctx.fillText(fd(s[i].date), X(i), H - 8);
-      }
-
+      ctx.font = '600 10px Manrope,sans-serif'; ctx.fillStyle = mu; ctx.strokeStyle = gl; ctx.lineWidth = 1;
+      for (var g = 0; g <= 3; g++) { var v = mn + (mx - mn) * g / 3, y = Y(v); ctx.beginPath(); ctx.setLineDash([3, 5]); ctx.moveTo(pl, y); ctx.lineTo(W - pr, y); ctx.stroke(); ctx.setLineDash([]); ctx.textAlign = 'right'; ctx.fillText(fc(v), pl - 8, y + 3); }
+      ctx.textAlign = 'center'; var L = Math.min(5, n);
+      for (var l = 0; l < L; l++) { var i = Math.round(L > 1 ? l * (n - 1) / (L - 1) : 0); ctx.fillText(fd(s[i].date), X(i), H - 8); }
       var cnt = Math.max(2, Math.ceil(n * S.chart.p));
       var pts = s.slice(0, cnt).map(function (o, i2) { return [X(i2), Y(o.v)]; });
-      var gr = ctx.createLinearGradient(0, pt, 0, H - pb);
-      gr.addColorStop(0, ha(ln, .3)); gr.addColorStop(1, ha(ln, 0));
-      ctx.beginPath();
-      ctx.moveTo(pts[0][0], H - pb);
-      pts.forEach(function (p) { ctx.lineTo(p[0], p[1]); });
-      ctx.lineTo(pts[pts.length - 1][0], H - pb);
-      ctx.closePath(); ctx.fillStyle = gr; ctx.fill();
-
-      ctx.beginPath();
-      pts.forEach(function (p, i3) { i3 ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); });
-      ctx.strokeStyle = ln; ctx.lineWidth = 2.6; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
-
-      var li = S.chart.hover >= 0 ? Math.min(S.chart.hover, cnt - 1) : cnt - 1;
-      var lp = [X(li), Y(s[li].v)];
-      if (S.chart.hover >= 0) {
-        ctx.beginPath(); ctx.setLineDash([4, 4]);
-        ctx.moveTo(lp[0], pt); ctx.lineTo(lp[0], H - pb);
-        ctx.strokeStyle = ha(ln, .5); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
-      }
+      var gr = ctx.createLinearGradient(0, pt, 0, H - pb); gr.addColorStop(0, ha(ln, .3)); gr.addColorStop(1, ha(ln, 0));
+      ctx.beginPath(); ctx.moveTo(pts[0][0], H - pb); pts.forEach(function (p) { ctx.lineTo(p[0], p[1]); }); ctx.lineTo(pts[pts.length - 1][0], H - pb); ctx.closePath(); ctx.fillStyle = gr; ctx.fill();
+      ctx.beginPath(); pts.forEach(function (p, i3) { i3 ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); }); ctx.strokeStyle = ln; ctx.lineWidth = 2.6; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
+      var li = S.chart.hover >= 0 ? Math.min(S.chart.hover, cnt - 1) : cnt - 1, lp = [X(li), Y(s[li].v)];
+      if (S.chart.hover >= 0) { ctx.beginPath(); ctx.setLineDash([4, 4]); ctx.moveTo(lp[0], pt); ctx.lineTo(lp[0], H - pb); ctx.strokeStyle = ha(ln, .5); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]); }
       ctx.beginPath(); ctx.arc(lp[0], lp[1], 7, 0, 7); ctx.fillStyle = ha(ln, .25); ctx.fill();
       ctx.beginPath(); ctx.arc(lp[0], lp[1], 4, 0, 7); ctx.fillStyle = ln; ctx.fill();
-
-      if (S.chart.hover >= 0 && tip) {
-        tip.innerHTML = fmt(s[li].v) + '<span>' + fdf(s[li].date) + '</span>';
-        tip.style.opacity = 1;
-        tip.style.left = Math.max(4, Math.min(W - tip.offsetWidth - 4, lp[0] - tip.offsetWidth / 2)) + 'px';
-        tip.style.top = Math.max(2, lp[1] - 58) + 'px';
-      } else if (tip) tip.style.opacity = 0;
+      if (S.chart.hover >= 0 && tip) { tip.innerHTML = fmt(s[li].v) + '<span>' + fdf(s[li].date) + '</span>'; tip.style.opacity = 1; tip.style.left = Math.max(4, Math.min(W - tip.offsetWidth - 4, lp[0] - tip.offsetWidth / 2)) + 'px'; tip.style.top = Math.max(2, lp[1] - 58) + 'px'; }
+      else if (tip) tip.style.opacity = 0;
     }
-
     if (S.chart.raf) cancelAnimationFrame(S.chart.raf);
     var t0 = performance.now();
-    function loop(t) {
-      var p = Math.max(0, Math.min(1, (t - t0) / 750));
-      S.chart.p = 1 - Math.pow(1 - p, 3);
-      draw();
-      if (p < 1) S.chart.raf = requestAnimationFrame(loop);
-      else S.chart.raf = 0;
-    }
+    function loop(t) { var p = Math.max(0, Math.min(1, (t - t0) / 750)); S.chart.p = 1 - Math.pow(1 - p, 3); draw(); if (p < 1) S.chart.raf = requestAnimationFrame(loop); else S.chart.raf = 0; }
     S.chart.raf = requestAnimationFrame(loop);
-
-    c.onmousemove = function (e) {
-      var r = c.getBoundingClientRect();
-      var x = e.clientX - r.left;
-      S.chart.hover = Math.max(0, Math.min(S.chart.data.length - 1, Math.round((x - 50) / (W - 64) * (S.chart.data.length - 1))));
-      draw();
-    };
+    c.onmousemove = function (e) { var r = c.getBoundingClientRect(); S.chart.hover = Math.max(0, Math.min(S.chart.data.length - 1, Math.round((e.clientX - r.left - 50) / (W - 64) * (S.chart.data.length - 1)))); draw(); };
     c.onmouseleave = function () { S.chart.hover = -1; draw(); };
-    c.ontouchstart = function (e) {
-      if (!e.touches[0]) return;
-      var r = c.getBoundingClientRect();
-      S.chart.hover = Math.max(0, Math.min(S.chart.data.length - 1, Math.round((e.touches[0].clientX - r.left - 50) / (W - 64) * (S.chart.data.length - 1))));
-      draw();
-    };
+    c.ontouchstart = function (e) { if (!e.touches[0]) return; var r = c.getBoundingClientRect(); S.chart.hover = Math.max(0, Math.min(S.chart.data.length - 1, Math.round((e.touches[0].clientX - r.left - 50) / (W - 64) * (S.chart.data.length - 1)))); draw(); };
   }
 
-  /* ---------- ОПЕРАЦИИ ---------- */
+  /* ==================== ОПЕРАЦИИ ==================== */
 
   function filtered() {
     var f = S.f, a = S.transactions.slice();
     if (f.type !== 'all') a = a.filter(function (t) { return t.type === f.type; });
     if (f.cat !== 'all') a = a.filter(function (t) { return t.category === f.cat; });
-    if (f.q) {
-      var q = f.q.toLowerCase();
-      a = a.filter(function (t) {
-        return String(t.note || '').toLowerCase().indexOf(q) >= 0 ||
-          String((CM[t.category] || {}).n || '').toLowerCase().indexOf(q) >= 0 ||
-          String(t.amount).indexOf(q) >= 0 ||
-          String(t.date).indexOf(q) >= 0;
-      });
-    }
+    if (f.q) { var q = f.q.toLowerCase(); a = a.filter(function (t) { return String(t.note || '').toLowerCase().indexOf(q) >= 0 || String((CM[t.category] || {}).n || '').toLowerCase().indexOf(q) >= 0 || String(t.amount).indexOf(q) >= 0 || String(t.date).indexOf(q) >= 0; }); }
     if (f.sort === 'date-desc') a.sort(function (x, y) { return String(y.date).localeCompare(String(x.date)) || new Date(y.created_at) - new Date(x.created_at); });
     if (f.sort === 'date-asc') a.sort(function (x, y) { return String(x.date).localeCompare(String(y.date)) || new Date(x.created_at) - new Date(y.created_at); });
     if (f.sort === 'amt-desc') a.sort(function (x, y) { return y.amount - x.amount; });
@@ -752,1163 +488,492 @@
   }
 
   function txHTML() {
-    var f = S.f;
-    var cs = f.type === 'income' ? CATS.income : f.type === 'expense' ? CATS.expense : CATS.expense.concat(CATS.income);
-    return '<div class="tools">' +
-      '<div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg>' +
+    var f = S.f, cs = f.type === 'income' ? CATS.income : f.type === 'expense' ? CATS.expense : CATS.expense.concat(CATS.income);
+    return '<div class="tools"><div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg>' +
       '<input id="txQ" type="text" placeholder="Поиск: заметка, категория, сумма…" value="' + esc(f.q) + '"></div>' +
-      '<div class="seg">' +
-      [['all', 'Все'], ['income', 'Доходы'], ['expense', 'Расходы']].map(function (p) {
-        return '<button class="' + (f.type === p[0] ? 'on' : '') + '" data-action="tx-type" data-type="' + p[0] + '">' + p[1] + '</button>';
-      }).join('') + '</div>' +
-      '<select id="txCat"><option value="all">Все категории</option>' +
-      cs.map(function (c) { return '<option value="' + c.k + '"' + (f.cat === c.k ? ' selected' : '') + '>' + c.e + ' ' + c.n + '</option>'; }).join('') + '</select>' +
-      '<select id="txSort">' +
-      [['date-desc', 'Сначала новые'], ['date-asc', 'Сначала старые'], ['amt-desc', 'Сумма ↓'], ['amt-asc', 'Сумма ↑'], ['manual', 'Мой порядок']].map(function (p) {
-        return '<option value="' + p[0] + '"' + (f.sort === p[0] ? ' selected' : '') + '>' + p[1] + '</option>';
-      }).join('') + '</select>' +
-      '<select id="txView"><option value="">Мои виды</option>' +
-      S.views.map(function (v) { return '<option value="' + v.id + '"' + (S.activeView === v.id ? ' selected' : '') + '>★ ' + esc(v.name) + '</option>'; }).join('') + '</select>' +
+      '<div class="seg">' + [['all', 'Все'], ['income', 'Доходы'], ['expense', 'Расходы']].map(function (p) { return '<button class="' + (f.type === p[0] ? 'on' : '') + '" data-action="tx-type" data-type="' + p[0] + '">' + p[1] + '</button>'; }).join('') + '</div>' +
+      '<select id="txCat"><option value="all">Все категории</option>' + cs.map(function (c) { return '<option value="' + c.k + '"' + (f.cat === c.k ? ' selected' : '') + '>' + c.e + ' ' + c.n + '</option>'; }).join('') + '</select>' +
+      '<select id="txSort">' + [['date-desc', 'Сначала новые'], ['date-asc', 'Сначала старые'], ['amt-desc', 'Сумма ↓'], ['amt-asc', 'Сумма ↑'], ['manual', 'Мой порядок']].map(function (p) { return '<option value="' + p[0] + '"' + (f.sort === p[0] ? ' selected' : '') + '>' + p[1] + '</option>'; }).join('') + '</select>' +
+      '<select id="txView"><option value="">Мои виды</option>' + S.views.map(function (v) { return '<option value="' + v.id + '"' + (S.activeView === v.id ? ' selected' : '') + '>★ ' + esc(v.name) + '</option>'; }).join('') + '</select>' +
       '<button class="icon-btn" data-action="save-view" title="Сохранить вид">★</button>' +
-      '<button class="icon-btn d" data-action="del-view" title="Удалить вид"' + (S.activeView ? '' : ' disabled') + '>🗑</button>' +
-      '</div><div class="sum" id="txSummary"></div><div class="tlist" id="txList"></div><div id="bulkBar"></div>';
+      '<button class="icon-btn d" data-action="del-view" title="Удалить вид"' + (S.activeView ? '' : ' disabled') + '>🗑</button></div>' +
+      '<div class="sum" id="txSummary"></div><div class="tlist" id="txList"></div><div id="bulkBar"></div>';
   }
 
   function bindTxTools() {
-    $('#txQ').addEventListener('input', deb(function (e) {
-      S.f.q = e.target.value; S.activeView = null; renderTxList();
-    }, 140));
-    $('#txCat').addEventListener('change', function (e) { S.f.cat = e.target.value; S.activeView = null; renderTxList(); });
-    $('#txSort').addEventListener('change', function (e) { S.f.sort = e.target.value; S.activeView = null; renderTxList(); });
-    $('#txView').addEventListener('change', function (e) {
-      var v = S.views.filter(function (x) { return x.id === e.target.value; })[0];
-      if (v) { S.f = clone(v.f); S.activeView = v.id; render(); }
-      else { S.activeView = null; renderTxList(); }
-    });
+    var q = $('#txQ'); if (q) q.addEventListener('input', deb(function (e) { S.f.q = e.target.value; S.activeView = null; renderTxList(); }, 140));
+    var cat = $('#txCat'); if (cat) cat.addEventListener('change', function (e) { S.f.cat = e.target.value; S.activeView = null; renderTxList(); });
+    var sort = $('#txSort'); if (sort) sort.addEventListener('change', function (e) { S.f.sort = e.target.value; S.activeView = null; renderTxList(); });
+    var view = $('#txView'); if (view) view.addEventListener('change', function (e) { var v = S.views.filter(function (x) { return x.id === e.target.value; })[0]; if (v) { S.f = clone(v.f); S.activeView = v.id; render(); } else { S.activeView = null; renderTxList(); } });
   }
 
   function renderTxList() {
-    var box = $('#txList');
-    if (!box) return;
+    var box = $('#txList'); if (!box) return;
     var a = filtered(), f = S.f, inc = 0, exp = 0;
     a.forEach(function (t) { if (t.type === 'income') inc += t.amount; else exp += t.amount; });
     var sc = a.filter(function (t) { return has(t.id); }).length;
-
-    $('#txSummary').innerHTML =
-      '<label class="selall"><input type="checkbox" id="selAll"' + (a.length && sc === a.length ? ' checked' : '') + '>Выбрать все</label>' +
-      '<span><b>' + a.length + '</b> операций</span>' +
-      '<span class="in">+' + fmt(inc) + '</span><span class="out">−' + fmt(exp) + '</span><span class="sp"></span>' +
-      (f.sort === 'manual' ? '<span>Перетаскивай строки, чтобы менять порядок</span>' : '');
-
+    var sum = $('#txSummary');
+    if (sum) sum.innerHTML = '<label class="selall"><input type="checkbox" id="selAll"' + (a.length && sc === a.length ? ' checked' : '') + '>Выбрать все</label><span><b>' + a.length + '</b> операций</span><span class="in">+' + fmt(inc) + '</span><span class="out">−' + fmt(exp) + '</span><span class="sp"></span>' + (f.sort === 'manual' ? '<span>Перетаскивай строки</span>' : '');
     var sa = $('#selAll');
-    if (sc > 0 && sc < a.length) sa.classList.add('ind');
-    sa.onchange = function () {
-      a.forEach(function (t) {
-        var i = S.sel.indexOf(t.id);
-        if (sa.checked && i < 0) S.sel.push(t.id);
-        if (!sa.checked && i >= 0) S.sel.splice(i, 1);
-      });
-      renderTxList();
-    };
-
-    if (!a.length) {
-      box.innerHTML = '<div class="empty"><div class="ei">' + (S.transactions.length ? '🔍' : '💸') + '</div>' +
-        '<b>' + (S.transactions.length ? 'Ничего не найдено' : 'Операций пока нет') + '</b>' +
-        '<p>' + (S.transactions.length ? 'Измени фильтры или запрос.' : 'Добавь первый доход или расход — капитал оживёт.') + '</p>' +
-        (S.transactions.length ? '' : '<button class="btn pri" data-action="new-tx">＋ Добавить операцию</button>') + '</div>';
-    } else {
-      box.innerHTML = a.map(function (t) {
-        var c = CM[t.category] || CM.other;
-        return '<div class="trow' + (has(t.id) ? ' sel' : '') + '" data-action="open-tx" data-id="' + t.id + '"' +
-          (f.sort === 'manual' ? ' draggable="true" data-drag="' + t.id + '"' : '') + '>' +
-          '<input type="checkbox" data-change="select-tx" data-id="' + t.id + '"' + (has(t.id) ? ' checked' : '') + ' aria-label="Выбрать">' +
-          '<span class="grip">⋮⋮</span>' +
-          '<span class="tic" style="background:' + ha(c.c, .15) + '">' + c.e + '</span>' +
-          '<div class="tmain"><b>' + esc(t.note || c.n) + '</b><span>' + c.n + ' · ' + rel(t.date) + '</span></div>' +
-          '<span class="tamt ' + (t.type === 'income' ? 'in' : 'out') + '">' + (t.type === 'income' ? '+' : '−') + ' ' + fmt(t.amount) + '</span>' +
-          '<span class="chev">›</span></div>';
-      }).join('');
-    }
-
-    $('#bulkBar').innerHTML = S.sel.length
-      ? '<div class="bulk"><b>Выбрано: ' + S.sel.length + '</b><span class="sp"></span>' +
-        '<button class="btn dan sm" data-action="bulk-delete">🗑 Удалить</button>' +
-        '<button class="btn gho sm" data-action="bulk-clear">Снять выделение</button></div>'
-      : '';
+    if (sa) { if (sc > 0 && sc < a.length) sa.classList.add('ind'); sa.onchange = function () { a.forEach(function (t) { var i = S.sel.indexOf(t.id); if (sa.checked && i < 0) S.sel.push(t.id); if (!sa.checked && i >= 0) S.sel.splice(i, 1); }); renderTxList(); }; }
+    if (!a.length) { box.innerHTML = '<div class="empty"><div class="ei">' + (S.transactions.length ? '🔍' : '💸') + '</div><b>' + (S.transactions.length ? 'Ничего не найдено' : 'Операций пока нет') + '</b><p>' + (S.transactions.length ? 'Измени фильтры.' : 'Добавь первый доход или расход.') + '</p>' + (S.transactions.length ? '' : '<button class="btn pri" data-action="new-tx">＋ Добавить</button>') + '</div>'; }
+    else { box.innerHTML = a.map(function (t) { var c = CM[t.category] || CM.other; return '<div class="trow' + (has(t.id) ? ' sel' : '') + '" data-action="open-tx" data-id="' + t.id + '"' + (f.sort === 'manual' ? ' draggable="true" data-drag="' + t.id + '"' : '') + '><input type="checkbox" data-change="select-tx" data-id="' + t.id + '"' + (has(t.id) ? ' checked' : '') + '><span class="grip">⋮⋮</span><span class="tic" style="background:' + ha(c.c, .15) + '">' + c.e + '</span><div class="tmain"><b>' + esc(t.note || c.n) + '</b><span>' + c.n + ' · ' + rel(t.date) + '</span></div><span class="tamt ' + (t.type === 'income' ? 'in' : 'out') + '">' + (t.type === 'income' ? '+' : '−') + ' ' + fmt(t.amount) + '</span><span class="chev">›</span></div>'; }).join(''); }
+    var bb = $('#bulkBar');
+    if (bb) bb.innerHTML = S.sel.length ? '<div class="bulk"><b>Выбрано: ' + S.sel.length + '</b><span class="sp"></span><button class="btn dan sm" data-action="bulk-delete">🗑 Удалить</button><button class="btn gho sm" data-action="bulk-clear">Снять</button></div>' : '';
   }
 
-  /* ---------- ЦЕЛИ ---------- */
+  /* ==================== ЦЕЛИ ==================== */
 
   function goalsHTML() {
     var total = S.goals.reduce(function (s, g) { return s + g.saved; }, 0);
-    return '<div class="head rv"><p>Накоплено всего: <b>' + fmt(total) + '</b></p><span class="sp"></span>' +
-      '<button class="btn pri" data-action="new-goal">＋ Новая цель</button></div>' +
+    return '<div class="head rv"><p>Накоплено всего: <b>' + fmt(total) + '</b></p><span class="sp"></span><button class="btn pri" data-action="new-goal">＋ Новая цель</button></div>' +
       (S.goals.length ? '<div class="ggrid">' + S.goals.map(function (g, i) {
         var p = pct(g), done = p >= 100, cover = goalCover(g);
         return '<div class="gcard rv" style="--d:' + (i * .06) + 's" data-action="open-goal" data-id="' + g.id + '">' +
-          '<div class="gcov">' + (cover ? '<img src="' + esc(cover) + '" alt="' + esc(g.title) + '">' :
-            '<div class="cover-fallback" style="position:absolute;inset:0;display:grid;place-items:center;font-size:44px;background:linear-gradient(135deg,' + ha('#4D9FFF', .35) + ',' + ha('#A78BFA', .35) + ')">🎯</div>') +
+          '<div class="gcov">' + (cover ? '<img src="' + esc(cover) + '" alt="' + esc(g.title) + '">' : '<div style="position:absolute;inset:0;display:grid;place-items:center;font-size:44px;background:linear-gradient(135deg,' + ha('#4D9FFF', .35) + ',' + ha('#A78BFA', .35) + ')">🎯</div>') +
           (done ? '<span class="gdone">✓ ДОСТИГНУТА</span>' : '') +
-          '<div class="gring"><svg viewBox="0 0 66 66"><circle cx="33" cy="33" r="27" fill="rgba(8,11,16,.55)" stroke="rgba(255,255,255,.25)" stroke-width="6"/>' +
-          '<circle cx="33" cy="33" r="27" fill="none" stroke="' + (done ? '#2FE6A7' : '#FFDD2D') + '" stroke-width="6" stroke-linecap="round" stroke-dasharray="' + (p * 1.696) + ' 169.6"/></svg>' +
-          '<b>' + Math.round(p) + '%</b></div></div>' +
-          '<div class="gbody"><h4>' + esc(g.title) + '</h4>' +
-          '<div class="sub">' + (done ? 'Цель закрыта — отличная работа!' : 'Осталось накопить ' + fmt(Math.max(g.target - g.saved, 0))) + '</div>' +
-          '<div class="gnums"><b>' + fmt(g.saved) + '</b><span>из ' + fmt(g.target) + '</span></div>' +
-          '<div class="bar' + (done ? ' g' : '') + '"><i style="width:' + p + '%"></i></div>' +
+          '<div class="gring"><svg viewBox="0 0 66 66"><circle cx="33" cy="33" r="27" fill="rgba(8,11,16,.55)" stroke="rgba(255,255,255,.25)" stroke-width="6"/><circle cx="33" cy="33" r="27" fill="none" stroke="' + (done ? '#2FE6A7' : '#FFDD2D') + '" stroke-width="6" stroke-linecap="round" stroke-dasharray="' + (p * 1.696) + ' 169.6"/></svg><b>' + Math.round(p) + '%</b></div></div>' +
+          '<div class="gbody"><h4>' + esc(g.title) + '</h4><div class="sub">' + (done ? 'Цель закрыта!' : 'Осталось ' + fmt(Math.max(g.target - g.saved, 0))) + '</div>' +
+          '<div class="gnums"><b>' + fmt(g.saved) + '</b><span>из ' + fmt(g.target) + '</span></div><div class="bar' + (done ? ' g' : '') + '"><i style="width:' + p + '%"></i></div>' +
           '<div class="gacts"><button class="btn pri sm" data-action="fund-goal" data-id="' + g.id + '"' + (done ? ' disabled' : '') + '>＋ Пополнить</button>' +
           '<button class="icon-btn" data-action="edit-goal" data-id="' + g.id + '" title="Изменить">✎</button>' +
           '<button class="icon-btn d" data-action="delete-goal" data-id="' + g.id + '" title="Удалить">🗑</button></div></div></div>';
       }).join('') + '</div>' :
-        '<div class="empty card"><div class="ei">🎯</div><b>Целей пока нет</b>' +
-        '<p>Цель с фотографией мотивирует сильнее цифры. Создай первую — «Отпуск» или «Подушка безопасности».</p>' +
-        '<button class="btn pri" data-action="new-goal">＋ Создать цель</button></div>');
+        '<div class="empty card"><div class="ei">🎯</div><b>Целей пока нет</b><p>Создай первую цель.</p><button class="btn pri" data-action="new-goal">＋ Создать цель</button></div>');
   }
 
-  /* ---------- ВЫПЛАТЫ ---------- */
+  /* ==================== ВЫПЛАТЫ ==================== */
 
   function payHTML() {
-    var rows = S.payments.map(function (p) { return { p: p, i: pinfo(p) }; })
-      .sort(function (a, b) { return a.i.due - b.i.due; });
-    var tot = S.payments.filter(function (p) { return p.active; })
-      .reduce(function (s, p) { return s + p.amount; }, 0);
-    return '<div class="head rv"><p>Регулярных платежей в месяц: <b>' + fmt(tot) + '</b></p><span class="sp"></span>' +
-      '<button class="btn pri" data-action="new-payment">＋ Новая выплата</button></div>' +
+    var rows = S.payments.map(function (p) { return { p: p, i: pinfo(p); }).sort(function (a, b) { return a.i.due - b.i.due; });
+    var tot = S.payments.filter(function (p) { return p.active; }).reduce(function (s, p) { return s + p.amount; }, 0);
+    return '<div class="head rv"><p>Регулярных платежей: <b>' + fmt(tot) + '/мес</b></p><span class="sp"></span><button class="btn pri" data-action="new-payment">＋ Новая выплата</button></div>' +
       (rows.length ? '<div class="plist">' + rows.map(function (x, n) {
         var p = x.p, i = x.i, c = CM[p.category] || CM.other;
-        return '<div class="prow rv' + (p.active ? '' : ' off') + '" style="--d:' + (n * .05) + 's">' +
-          '<span class="pic" style="background:' + ha(c.c, .15) + '">' + c.e + '</span>' +
-          '<div class="pmain"><b>' + esc(p.title) + '</b><span>каждое ' + p.day + '-е число · ' + c.n + '</span></div>' +
-          '<div class="pnext"><b>' + fd(iso(i.due)) + '</b><span class="bdg ' + i.st + '">' + i.label + '</span></div>' +
-          '<span class="pamt">' + fmt(p.amount) + '</span>' +
+        return '<div class="prow rv' + (p.active ? '' : ' off') + '" style="--d:' + (n * .05) + 's"><span class="pic" style="background:' + ha(c.c, .15) + '">' + c.e + '</span>' +
+          '<div class="pmain"><b>' + esc(p.title) + '</b><span>каждое ' + p.day + '-е · ' + c.n + '</span></div>' +
+          '<div class="pnext"><b>' + fd(iso(i.due)) + '</b><span class="bdg ' + i.st + '">' + i.label + '</span></div><span class="pamt">' + fmt(p.amount) + '</span>' +
           '<div class="pacts"><label class="sw" title="Активна"><input type="checkbox" data-change="toggle-payment" data-id="' + p.id + '"' + (p.active ? ' checked' : '') + '><i></i></label>' +
-          '<button class="btn pri sm" data-action="pay-now" data-id="' + p.id + '"' + (!p.active || i.st === 'paid' ? ' disabled' : '') + '>' +
-          (i.st === 'paid' ? '✓ Оплачено' : 'Оплатить') + '</button>' +
-          '<button class="icon-btn" data-action="edit-payment" data-id="' + p.id + '">✎</button>' +
-          '<button class="icon-btn d" data-action="delete-payment" data-id="' + p.id + '">🗑</button></div></div>';
+          '<button class="btn pri sm" data-action="pay-now" data-id="' + p.id + '"' + (!p.active || i.st === 'paid' ? ' disabled' : '') + '>' + (i.st === 'paid' ? '✓ Оплачено' : 'Оплатить') + '</button>' +
+          '<button class="icon-btn" data-action="edit-payment" data-id="' + p.id + '">✎</button><button class="icon-btn d" data-action="delete-payment" data-id="' + p.id + '">🗑</button></div></div>';
       }).join('') + '</div>' :
-        '<div class="empty card"><div class="ei">🗓️</div><b>Выплат пока нет</b>' +
-        '<p>Добавь аренду, подписки и связь — кабинет напомнит, что и когда оплатить.</p>' +
-        '<button class="btn pri" data-action="new-payment">＋ Добавить выплату</button></div>');
+        '<div class="empty card"><div class="ei">🗓️</div><b>Выплат пока нет</b><button class="btn pri" data-action="new-payment">＋ Добавить</button></div>');
   }
 
-  /* ---------- ЛИЧНЫЙ КАБИНЕТ ---------- */
+  /* ==================== КАБИНЕТ ==================== */
 
   function accountHTML() {
     var name = (S.profile && S.profile.display_name) || 'Пользователь';
     var email = (S.profile && S.profile.email) || (S.user && S.user.email) || '';
     var created = S.profile && S.profile.created_at ? fdf(iso(new Date(S.profile.created_at))) : '—';
-    var ini = initials(name, email);
-    var txCount = S.transactions.length, goalCount = S.goals.length, payCount = S.payments.length;
+    var av = ini(name, email);
     var cur = (S.profile && S.profile.currency) || 'RUB';
     var theme = (S.profile && S.profile.theme) || 'dark';
-
     return '<div class="account">' +
-      '<div class="profile-card rv">' +
-      '<div class="profile-cover"></div><div class="profile-body">' +
-      '<div class="profile-ava">' + ini + '</div>' +
+      '<div class="profile-card rv"><div class="profile-cover"></div><div class="profile-body"><div class="profile-ava">' + av + '</div>' +
       '<h2>' + esc(name) + '</h2><div class="email">' + esc(email) + '</div>' +
-      '<div class="profile-badges"><span class="bdg paid">✓ Supabase</span><span class="bdg violet">Владелец</span>' +
-      '<span class="bdg ok">RLS защита</span></div>' +
-      '<div class="kv" style="margin-top:16px">' +
-      '<div class="row"><span>Аккаунт создан</span><b>' + created + '</b></div>' +
-      '<div class="row"><span>ID пользователя</span><b style="font-size:10.5px">' + esc(S.user ? S.user.id : '') + '</b></div>' +
+      '<div class="profile-badges"><span class="bdg paid">✓ Supabase</span><span class="bdg violet">Владелец</span><span class="bdg ok">RLS защита</span></div>' +
+      '<div class="kv" style="margin-top:16px"><div class="row"><span>Аккаунт создан</span><b>' + created + '</b></div>' +
+      '<div class="row"><span>ID</span><b style="font-size:10px">' + esc(S.user ? S.user.id : '') + '</b></div>' +
       '<div class="row"><span>Сессия</span><b>Активна</b></div></div>' +
       '<div class="profile-actions"><button class="btn pri" data-action="edit-name">✎ Изменить имя</button>' +
-      '<button class="btn dan" data-action="logout">Выйти</button></div></div></div>' +
-
+      '<button class="btn dan" data-action="logout">Выйти из аккаунта</button></div></div></div>' +
       '<div class="acc-right">' +
-      '<div class="card rv" style="--d:.06s"><div class="ch"><h3>Твои данные</h3><span class="hint">привязаны к аккаунту</span></div>' +
-      '<div class="tiles"><div class="tile"><b>' + txCount + '</b><span>операций</span></div>' +
-      '<div class="tile"><b>' + goalCount + '</b><span>целей</span></div>' +
-      '<div class="tile"><b>' + payCount + '</b><span>выплат</span></div></div>' +
-      '<div class="sec-list">' +
-      '<div class="sec-item"><i>✓</i><span>Данные видит только твой аккаунт</span></div>' +
-      '<div class="sec-item"><i>✓</i><span>Фото целей лежат в приватном бакете</span></div>' +
-      '<div class="sec-item"><i>✓</i><span>Выход очищает сессию на этом устройстве</span></div></div></div>' +
-
+      '<div class="card rv" style="--d:.06s"><div class="ch"><h3>Твои данные</h3></div>' +
+      '<div class="tiles"><div class="tile"><b>' + S.transactions.length + '</b><span>операций</span></div>' +
+      '<div class="tile"><b>' + S.goals.length + '</b><span>целей</span></div>' +
+      '<div class="tile"><b>' + S.payments.length + '</b><span>выплат</span></div></div></div>' +
       '<div class="card rv" style="--d:.1s"><div class="ch"><h3>Настройки</h3></div>' +
       '<div class="setting-row"><div class="info"><b>Тема оформления</b><span>Тёмная или светлая</span></div>' +
-      '<select data-change="theme-select"><option value="dark"' + (theme === 'dark' ? ' selected' : '') + '>Тёмная</option>' +
-      '<option value="light"' + (theme === 'light' ? ' selected' : '') + '>Светлая</option></select></div>' +
+      '<select data-change="theme-select"><option value="dark"' + (theme === 'dark' ? ' selected' : '') + '>Тёмная</option><option value="light"' + (theme === 'light' ? ' selected' : '') + '>Светлая</option></select></div>' +
       '<div class="setting-row"><div class="info"><b>Валюта</b><span>Для отображения сумм</span></div>' +
-      '<select data-change="currency-select">' +
-      ['RUB', 'USD', 'EUR', 'KZT', 'BYN'].map(function (c) {
-        return '<option value="' + c + '"' + (cur === c ? ' selected' : '') + '>' + c + '</option>';
-      }).join('') + '</select></div>' +
+      '<select data-change="currency-select">' + ['RUB', 'USD', 'EUR', 'KZT', 'BYN'].map(function (c) { return '<option value="' + c + '"' + (cur === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select></div>' +
       '<div class="setting-row"><div class="info"><b>Пароль</b><span>Сменить пароль от аккаунта</span></div>' +
       '<button class="btn gho sm" data-action="change-password">Изменить</button></div></div>' +
-
-      '<div class="card rv" style="--d:.14s"><div class="ch"><h3>Резервная копия</h3><span class="hint">на случай сбоя</span></div>' +
-      '<p class="msub" style="margin-top:0">Скачай все свои данные одним JSON-файлом. Фотографии хранятся отдельно в Supabase Storage.</p>' +
-      '<div class="row" style="display:flex;gap:10px;flex-wrap:wrap">' +
-      '<button class="btn pri" data-action="export">⬇ Скачать копию</button>' +
+      '<div class="card rv" style="--d:.14s"><div class="ch"><h3>Резервная копия</h3></div>' +
+      '<p class="msub" style="margin-top:0">Скачай все свои данные одним JSON-файлом.</p>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn pri" data-action="export">⬇ Скачать копию</button>' +
       '<button class="btn gho" data-action="import">⬆ Загрузить копию</button></div></div>' +
-
       '<div class="card danger-zone rv" style="--d:.18s"><div class="ch"><h3>Опасная зона</h3></div>' +
-      '<p class="msub" style="margin-top:0">Удаление очистит операции, цели и выплаты. Профиль и аккаунт останутся. Действие можно отменить сразу после удаления.</p>' +
+      '<p class="msub" style="margin-top:0">Удаление очистит операции, цели и выплаты. Аккаунт останется.</p>' +
       '<button class="btn dan" data-action="wipe">Очистить все данные</button></div>' +
       '</div></div>';
   }
 
-  /* ---------- МОДАЛКИ ---------- */
+  /* ==================== МОДАЛКИ ==================== */
 
   function openModal(html) {
-    $('#modalRoot').innerHTML =
-      '<div class="ov"><div class="scrim" data-action="modal-close"></div>' +
-      '<div class="modal" role="dialog" aria-modal="true">' +
-      '<button class="icon-btn mx" data-action="modal-close" aria-label="Закрыть">✕</button>' +
-      html + '</div></div>';
-    var first = $('#modalRoot input:not([type=file]):not([type=checkbox]), #modalRoot select');
+    var root = $('#modalRoot'); if (!root) return;
+    root.innerHTML = '<div class="ov"><div class="scrim" data-action="modal-close"></div><div class="modal" role="dialog" aria-modal="true"><button class="icon-btn mx" data-action="modal-close" aria-label="Закрыть">✕</button>' + html + '</div></div>';
+    var first = root.querySelector('input:not([type=file]):not([type=checkbox]), select');
     if (first) setTimeout(function () { first.focus(); }, 60);
   }
-  function closeModal() { $('#modalRoot').innerHTML = ''; }
-  function bad(sel, msg) {
-    var f = $(sel).closest('.fld');
-    if (!f) return;
-    f.classList.add('bad');
-    var err = f.querySelector('.err');
-    if (err) err.textContent = msg;
-    setTimeout(function () { f.classList.remove('bad'); }, 2200);
-  }
-  function chipsHTML(type, selected) {
-    return CATS[type].map(function (c) {
-      return '<button type="button" class="cchip' + (c.k === selected ? ' on' : '') + '" data-cat="' + c.k + '"><em>' + c.e + '</em>' + c.n + '</button>';
-    }).join('');
-  }
-  function bindChips(box, cb) {
-    box.onclick = function (e) {
-      var b = e.target.closest('.cchip');
-      if (!b) return;
-      Array.prototype.forEach.call(box.children, function (x) { x.classList.toggle('on', x === b); });
-      cb(b.dataset.cat);
-    };
-  }
+  function closeModal() { var root = $('#modalRoot'); if (root) root.innerHTML = ''; }
+  function bad(sel, msg) { var f = $(sel); if (!f) return; var fld = f.closest('.fld'); if (!fld) return; fld.classList.add('bad'); var err = fld.querySelector('.err'); if (err) err.textContent = msg; setTimeout(function () { fld.classList.remove('bad'); }, 2200); }
+  function chipsHTML(type, selected) { return CATS[type].map(function (c) { return '<button type="button" class="cchip' + (c.k === selected ? ' on' : '') + '" data-cat="' + c.k + '"><em>' + c.e + '</em>' + c.n + '</button>'; }).join(''); }
+  function bindChips(box, cb) { if (!box) return; box.onclick = function (e) { var b = e.target.closest('.cchip'); if (!b) return; Array.prototype.forEach.call(box.children, function (x) { x.classList.toggle('on', x === b); }); cb(b.dataset.cat); }; }
 
+  /* ---------- Операция модалка ---------- */
   function txModal(id) {
     var t = id ? S.transactions.filter(function (x) { return x.id === id; })[0] : null;
-    var type = t ? t.type : 'expense';
-    var cat = t ? t.category : 'food';
-
-    openModal(
-      '<h2>' + (t ? 'Редактировать операцию' : 'Новая операция') + '</h2>' +
-      '<p class="msub">' + (t ? 'Измени данные — баланс обновится сразу.' : 'Запиши доход или расход — капитал пересчитается автоматически.') + '</p>' +
-      '<form id="txForm" novalidate>' +
-      '<div class="tseg"><button type="button" data-t="expense" class="' + (type === 'expense' ? 'on' : '') + '">− Расход</button>' +
-      '<button type="button" data-t="income" class="' + (type === 'income' ? 'on' : '') + '">+ Доход</button></div>' +
-      '<div class="fld"><label>Сумма</label><div class="awrap"><input id="txAmount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0" value="' + (t ? t.amount : '') + '"></div>' +
-      '<div class="err">Введи сумму больше нуля</div></div>' +
+    var type = t ? t.type : 'expense', cat = t ? t.category : 'food';
+    openModal('<h2>' + (t ? 'Редактировать операцию' : 'Новая операция') + '</h2><p class="msub">' + (t ? 'Измени данные — баланс обновится сразу.' : 'Запиши доход или расход.') + '</p>' +
+      '<form id="txForm" novalidate><div class="tseg"><button type="button" data-t="expense" class="' + (type === 'expense' ? 'on' : '') + '">− Расход</button><button type="button" data-t="income" class="' + (type === 'income' ? 'on' : '') + '">+ Доход</button></div>' +
+      '<div class="fld"><label>Сумма</label><div class="awrap"><input id="txAmount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0" value="' + (t ? t.amount : '') + '"></div><div class="err">Введи сумму больше нуля</div></div>' +
       '<div class="fld"><label>Категория</label><div class="chips2" id="txCats">' + chipsHTML(type, cat) + '</div></div>' +
       '<div class="fld"><label>Дата</label><input id="txDate" type="date" value="' + (t ? t.date : tiso()) + '"></div>' +
-      '<div class="fld"><label>Заметка</label><input id="txNote" type="text" maxlength="90" placeholder="Например: продукты на неделю" value="' + (t ? esc(t.note) : '') + '"></div>' +
-      '<div class="macts"><button type="button" class="btn gho" data-action="modal-close">Отмена</button>' +
-      '<button type="submit" class="btn pri">' + (t ? 'Сохранить' : 'Добавить') + '</button></div></form>'
-    );
-
-    $$('#modalRoot .tseg button').forEach(function (b) {
-      b.onclick = function () {
-        type = b.dataset.t;
-        cat = CATS[type][0].k;
-        $$('#modalRoot .tseg button').forEach(function (x) { x.classList.toggle('on', x === b); });
-        $('#txCats').innerHTML = chipsHTML(type, cat);
-        bindChips($('#txCats'), function (k) { cat = k; });
-      };
-    });
-    bindChips($('#txCats'), function (k) { cat = k; });
-
-    $('#txForm').onsubmit = async function (e) {
-      e.preventDefault();
-      var amount = parseFloat(String($('#txAmount').value).replace(',', '.'));
+      '<div class="fld"><label>Заметка</label><input id="txNote" type="text" maxlength="90" placeholder="Например: продукты" value="' + (t ? esc(t.note) : '') + '"></div>' +
+      '<div class="macts"><button type="button" class="btn gho" data-action="modal-close">Отмена</button><button type="submit" class="btn pri">' + (t ? 'Сохранить' : 'Добавить') + '</button></div></form>');
+    $$('#modalRoot .tseg button').forEach(function (b) { b.onclick = function () { type = b.dataset.t; cat = CATS[type][0].k; $$('#modalRoot .tseg button').forEach(function (x) { x.classList.toggle('on', x === b); }); var cc = $('#txCats'); if (cc) { cc.innerHTML = chipsHTML(type, cat); bindChips(cc, function (k) { cat = k; }); } }; });
+    var cc = $('#txCats'); if (cc) bindChips(cc, function (k) { cat = k; });
+    var form = $('#txForm'); if (!form) return;
+    form.onsubmit = async function (e) {
+      e.preventDefault(); var amount = parseFloat(String($('#txAmount').value).replace(',', '.'));
       if (!amount || amount <= 0) { bad('#txAmount', 'Введи сумму больше нуля'); return; }
-      var payload = {
-        type: type,
-        amount: amount,
-        category: cat,
-        date: $('#txDate').value || tiso(),
-        note: $('#txNote').value.trim()
-      };
-      closeModal();
-      if (t) await updateTx(t.id, payload);
-      else await addTx(payload);
+      var payload = { type: type, amount: amount, category: cat, date: $('#txDate').value || tiso(), note: $('#txNote').value.trim() };
+      closeModal(); if (t) await updateTx(t.id, payload); else await addTx(payload);
     };
   }
 
+  /* ---------- Фото ---------- */
   function compressPhoto(file) {
     return new Promise(function (resolve, reject) {
       var reader = new FileReader();
-      reader.onload = function () {
-        var img = new Image();
-        img.onload = function () {
-          var max = 1400;
-          var k = Math.min(1, max / Math.max(img.width, img.height));
-          var cv = document.createElement('canvas');
-          cv.width = Math.round(img.width * k);
-          cv.height = Math.round(img.height * k);
-          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-          cv.toBlob(function (blob) {
-            if (blob) resolve(blob);
-            else reject(new Error('Не удалось сжать фото'));
-          }, 'image/jpeg', .84);
-        };
-        img.onerror = function () { reject(new Error('Не удалось прочитать изображение')); };
-        img.src = reader.result;
-      };
-      reader.onerror = function () { reject(new Error('Не удалось прочитать файл')); };
-      reader.readAsDataURL(file);
+      reader.onload = function () { var img = new Image(); img.onload = function () { var max = 1400, k = Math.min(1, max / Math.max(img.width, img.height)); var cv = document.createElement('canvas'); cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k); cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); cv.toBlob(function (blob) { if (blob) resolve(blob); else reject(new Error('Не удалось сжать')); }, 'image/jpeg', .84); }; img.onerror = function () { reject(new Error('Не удалось прочитать')); }; img.src = reader.result; };
+      reader.onerror = function () { reject(new Error('Ошибка чтения')); }; reader.readAsDataURL(file);
     });
   }
 
+  /* ---------- Цель модалка ---------- */
   function goalModal(id) {
     var g = id ? S.goals.filter(function (x) { return x.id === id; })[0] : null;
-    var photoBlob = null;
-    var photoPreview = g ? goalCover(g) : '';
-    var removePhoto = false;
-
+    var photoBlob = null, photoPreview = g ? goalCover(g) : '', removePhoto = false;
     function previewHTML() {
-      if (photoPreview) {
-        return '<div class="prev"><img src="' + esc(photoPreview) + '" alt="Фото цели">' +
-          '<button type="button" id="photoRemove">✕</button></div>';
-      }
-      return '<div class="drop"><input type="file" id="photoFile" accept="image/*">' +
-        '<em>📷</em><b>Нажми, чтобы загрузить фото</b><small>сожмём автоматически</small></div>';
+      if (photoPreview) return '<div class="prev"><img src="' + esc(photoPreview) + '" alt="Фото"><button type="button" id="photoRemove">✕</button></div>';
+      return '<div class="drop"><input type="file" id="photoFile" accept="image/*"><em>📷</em><b>Загрузить фото</b><small>сожмём автоматически</small></div>';
     }
-
-    openModal(
-      '<h2>' + (g ? 'Редактировать цель' : 'Новая цель') + '</h2>' +
-      '<p class="msub">Фотография делает цель осязаемой. Загрузи свою или оставим красивую обложку.</p>' +
-      '<form id="goalForm" novalidate>' +
-      '<div class="fld"><label>Название</label><input id="goalTitle" type="text" maxlength="70" placeholder="Например: Отпуск на море" value="' + (g ? esc(g.title) : '') + '">' +
-      '<div class="err">Дай цели название</div></div>' +
-      '<div class="grid2"><div class="fld"><label>Нужно накопить</label><div class="awrap"><input id="goalTarget" type="number" min="1" placeholder="100000" value="' + (g ? g.target : '') + '"></div>' +
-      '<div class="err">Укажи сумму цели</div></div>' +
-      '<div class="fld"><label>Уже накоплено</label><div class="awrap"><input id="goalSaved" type="number" min="0" placeholder="0" value="' + (g ? g.saved : 0) + '"></div>' +
-      '<div class="err">Не меньше нуля</div></div></div>' +
-      '<div class="fld"><label>Срок достижения</label><input id="goalDeadline" type="date" value="' + (g ? esc(g.deadline || '') : '') + '"></div>' +
-      '<div class="fld"><label>Фото цели</label><div id="photoBox">' + previewHTML() + '</div></div>' +
-      '<div class="macts"><button type="button" class="btn gho" data-action="modal-close">Отмена</button>' +
-      '<button type="submit" class="btn pri">' + (g ? 'Сохранить' : 'Создать цель') + '</button></div></form>'
-    );
-
+    openModal('<h2>' + (g ? 'Редактировать цель' : 'Новая цель') + '</h2><p class="msub">Фото делает цель осязаемой.</p>' +
+      '<form id="goalForm" novalidate><div class="fld"><label>Название</label><input id="goalTitle" type="text" maxlength="70" placeholder="Например: Отпуск" value="' + (g ? esc(g.title) : '') + '"><div class="err">Дай цели название</div></div>' +
+      '<div class="grid2"><div class="fld"><label>Нужно накопить</label><div class="awrap"><input id="goalTarget" type="number" min="1" placeholder="100000" value="' + (g ? g.target : '') + '"></div><div class="err">Укажи сумму</div></div>' +
+      '<div class="fld"><label>Уже накоплено</label><div class="awrap"><input id="goalSaved" type="number" min="0" placeholder="0" value="' + (g ? g.saved : 0) + '"></div><div class="err">Не меньше нуля</div></div></div>' +
+      '<div class="fld"><label>Срок</label><input id="goalDeadline" type="date" value="' + (g ? esc(g.deadline || '') : '') + '"></div>' +
+      '<div class="fld"><label>Фото</label><div id="photoBox">' + previewHTML() + '</div></div>' +
+      '<div class="macts"><button type="button" class="btn gho" data-action="modal-close">Отмена</button><button type="submit" class="btn pri">' + (g ? 'Сохранить' : 'Создать') + '</button></div></form>');
     function bindPhoto() {
       var inp = $('#photoFile');
-      if (inp) inp.onchange = async function () {
-        var f = inp.files[0];
-        if (!f) return;
-        try {
-          photoBlob = await compressPhoto(f);
-          photoPreview = URL.createObjectURL(photoBlob);
-          removePhoto = false;
-          $('#photoBox').innerHTML = previewHTML();
-          bindPhoto();
-        } catch (err) {
-          toast(D.errorMessage(err), '⚠️');
-        }
-      };
-      var rm = $('#photoRemove');
-      if (rm) rm.onclick = function () {
-        photoBlob = null; photoPreview = ''; removePhoto = true;
-        $('#photoBox').innerHTML = previewHTML();
-        bindPhoto();
-      };
+      if (inp) inp.onchange = async function () { var f = inp.files[0]; if (!f) return; try { photoBlob = await compressPhoto(f); photoPreview = URL.createObjectURL(photoBlob); removePhoto = false; var pb = $('#photoBox'); if (pb) { pb.innerHTML = previewHTML(); bindPhoto(); } } catch (err) { toast(D.errorMessage(err), '⚠️'); } };
+      var rm = $('#photoRemove'); if (rm) rm.onclick = function () { photoBlob = null; photoPreview = ''; removePhoto = true; var pb = $('#photoBox'); if (pb) { pb.innerHTML = previewHTML(); bindPhoto(); } };
     }
     bindPhoto();
-
-    $('#goalForm').onsubmit = async function (e) {
-      e.preventDefault();
-      var title = $('#goalTitle').value.trim();
-      var target = parseFloat($('#goalTarget').value);
-      var saved = parseFloat($('#goalSaved').value) || 0;
-      var deadline = $('#goalDeadline').value || '';
+    var form = $('#goalForm'); if (!form) return;
+    form.onsubmit = async function (e) {
+      e.preventDefault(); var title = $('#goalTitle').value.trim(), target = parseFloat($('#goalTarget').value), saved = parseFloat($('#goalSaved').value) || 0, deadline = $('#goalDeadline').value || '';
       if (!title) { bad('#goalTitle', 'Дай цели название'); return; }
-      if (!target || target <= 0) { bad('#goalTarget', 'Укажи сумму цели'); return; }
+      if (!target || target <= 0) { bad('#goalTarget', 'Укажи сумму'); return; }
       if (saved < 0) { bad('#goalSaved', 'Не меньше нуля'); return; }
-      closeModal();
-      await saveGoal(g ? g.id : null, { title: title, target: target, saved: saved, deadline: deadline }, photoBlob, removePhoto);
+      closeModal(); await saveGoal(g ? g.id : null, { title: title, target: target, saved: saved, deadline: deadline }, photoBlob, removePhoto);
     };
   }
 
   async function saveGoal(id, fields, photoBlob, removePhoto) {
-    var snapshot = clone(S.goals);
-    sync('busy', 'Сохраняем цель…');
+    var snapshot = clone(S.goals); sync('busy', 'Сохраняем…');
     try {
       var goal;
-      if (id) {
-        var patch = clone(fields);
-        if (removePhoto) patch.photo_path = null;
-        goal = await D.updateGoal(S.user.id, id, patch);
-        if (photoBlob) {
-          var path = await D.uploadPhoto(S.user.id, goal.id, photoBlob);
-          goal = await D.updateGoal(S.user.id, goal.id, { photo_path: path });
-        }
-      } else {
-        goal = await D.createGoal(S.user.id, fields);
-        if (photoBlob) {
-          var path2 = await D.uploadPhoto(S.user.id, goal.id, photoBlob);
-          goal = await D.updateGoal(S.user.id, goal.id, { photo_path: path2 });
-        }
-      }
+      if (id) { var patch = clone(fields); if (removePhoto) patch.photo_path = null; goal = await D.updateGoal(S.user.id, id, patch); if (photoBlob) { var path = await D.uploadPhoto(S.user.id, goal.id, photoBlob); goal = await D.updateGoal(S.user.id, goal.id, { photo_path: path }); } }
+      else { goal = await D.createGoal(S.user.id, fields); if (photoBlob) { var path2 = await D.uploadPhoto(S.user.id, goal.id, photoBlob); goal = await D.updateGoal(S.user.id, goal.id, { photo_path: path2 }); } }
       goal.photo_url = await D.photoUrl(goal.photo_path);
-      if (id) {
-        S.goals = S.goals.map(function (x) { return x.id === id ? goal : x; });
-      } else {
-        S.goals.unshift(goal);
-      }
-      render();
-      sync('', 'Синхронизировано');
-      toast(id ? 'Цель обновлена' : 'Цель создана', '🎯');
-    } catch (e) {
-      S.goals = snapshot;
-      render();
-      sync('err', 'Ошибка');
-      toast(D.errorMessage(e), '⚠️');
-    }
+      if (id) S.goals = S.goals.map(function (x) { return x.id === id ? goal : x; }); else S.goals.unshift(goal);
+      render(); sync('', 'Синхронизировано'); toast(id ? 'Цель обновлена' : 'Цель создана', '🎯');
+    } catch (e) { S.goals = snapshot; render(); sync('err', 'Ошибка'); toast(D.errorMessage(e), '⚠️'); }
   }
 
+  /* ---------- Пополнить цель ---------- */
   function fundModal(id) {
-    var g = S.goals.filter(function (x) { return x.id === id; })[0];
-    if (!g) return;
-    openModal(
-      '<h2>Пополнить цель</h2><p class="msub">' + esc(g.title) + '</p>' +
+    var g = S.goals.filter(function (x) { return x.id === id; })[0]; if (!g) return;
+    openModal('<h2>Пополнить цель</h2><p class="msub">' + esc(g.title) + '</p>' +
       '<div class="fpv"><span>' + fmt(g.saved) + '</span><b>' + fmt(g.target) + '</b></div>' +
       '<div class="bar" style="margin-bottom:16px"><i id="fundBar" style="width:' + pct(g) + '%"></i></div>' +
-      '<form id="fundForm" novalidate><div class="fld"><label>Сумма пополнения</label>' +
-      '<div class="awrap"><input id="fundAmount" type="number" min="1" placeholder="5000"></div>' +
-      '<div class="err">Введи сумму больше нуля</div>' +
-      '<div class="qchips">' + [1000, 5000, 10000, 25000].map(function (v) {
-        return '<button type="button" data-add="' + v + '">+' + fc(v) + ' ₽</button>';
-      }).join('') + '</div></div>' +
-      '<div class="macts"><button type="button" class="btn gho" data-action="modal-close">Отмена</button>' +
-      '<button type="submit" class="btn pri">Пополнить</button></div></form>'
-    );
-    var inp = $('#fundAmount');
-    function preview() {
-      var v = parseFloat(inp.value) || 0;
-      $('#fundBar').style.width = Math.max(0, Math.min(100, (g.saved + v) / g.target * 100)) + '%';
-    }
+      '<form id="fundForm" novalidate><div class="fld"><label>Сумма пополнения</label><div class="awrap"><input id="fundAmount" type="number" min="1" placeholder="5000"></div><div class="err">Введи сумму больше нуля</div>' +
+      '<div class="qchips">' + [1000, 5000, 10000, 25000].map(function (v) { return '<button type="button" data-add="' + v + '">+' + fc(v) + ' ₽</button>'; }).join('') + '</div></div>' +
+      '<div class="macts"><button type="button" class="btn gho" data-action="modal-close">Отмена</button><button type="submit" class="btn pri">Пополнить</button></div></form>');
+    var inp = $('#fundAmount'); if (!inp) return;
+    function preview() { var v = parseFloat(inp.value) || 0; var bar = $('#fundBar'); if (bar) bar.style.width = Math.max(0, Math.min(100, (g.saved + v) / g.target * 100)) + '%'; }
     inp.addEventListener('input', preview);
-    $$('#modalRoot .qchips button').forEach(function (b) {
-      b.onclick = function () {
-        inp.value = (parseFloat(inp.value) || 0) + parseFloat(b.dataset.add);
-        preview(); inp.focus();
-      };
-    });
-    $('#fundForm').onsubmit = async function (e) {
-      e.preventDefault();
-      var v = parseFloat(inp.value);
+    $$('#modalRoot .qchips button').forEach(function (b) { b.onclick = function () { inp.value = (parseFloat(inp.value) || 0) + parseFloat(b.dataset.add); preview(); inp.focus(); }; });
+    var form = $('#fundForm'); if (!form) return;
+    form.onsubmit = async function (e) {
+      e.preventDefault(); var v = parseFloat(inp.value);
       if (!v || v <= 0) { bad('#fundAmount', 'Введи сумму больше нуля'); return; }
-      closeModal();
-      await fundGoal(g.id, v);
+      closeModal(); await fundGoal(g.id, v);
     };
   }
 
   async function fundGoal(id, amount) {
-    var g = S.goals.filter(function (x) { return x.id === id; })[0];
-    if (!g) return;
-    var snapshot = clone(g);
-    var wasDone = pct(g) >= 100;
-    g.saved += amount;
-    render();
-    sync('busy', 'Пополняем цель…');
+    var g = S.goals.filter(function (x) { return x.id === id; })[0]; if (!g) return;
+    var snapshot = clone(g), wasDone = pct(g) >= 100;
+    g.saved += amount; render(); sync('busy', 'Пополняем…');
     try {
       var updated = await D.updateGoal(S.user.id, id, { saved: g.saved });
       updated.photo_url = g.photo_url;
       S.goals = S.goals.map(function (x) { return x.id === id ? updated : x; });
-      render();
-      if (S.drawer && S.drawer.type === 'goal' && S.drawer.id === id) openDrawer('goal', id);
+      render(); if (S.drawer && S.drawer.type === 'goal' && S.drawer.id === id) openDrawer('goal', id);
       sync('', 'Синхронизировано');
-      toast(!wasDone && pct(updated) >= 100 ? '🎉 Цель «' + updated.title + '» достигнута!' : 'Цель пополнена на ' + fmt(amount), !wasDone && pct(updated) >= 100 ? '🏆' : '🎯');
-    } catch (e) {
-      S.goals = S.goals.map(function (x) { return x.id === id ? snapshot : x; });
-      render();
-      sync('err', 'Ошибка');
-      toast(D.errorMessage(e), '⚠️');
-    }
+      toast(!wasDone && pct(updated) >= 100 ? '🎉 Цель «' + updated.title + '» достигнута!' : 'Пополнено на ' + fmt(amount), !wasDone && pct(updated) >= 100 ? '🏆' : '🎯');
+    } catch (e) { S.goals = S.goals.map(function (x) { return x.id === id ? snapshot : x; }); render(); sync('err', 'Ошибка'); toast(D.errorMessage(e), '⚠️'); }
   }
 
+  /* ---------- Выплата модалка ---------- */
   function paymentModal(id) {
     var p = id ? S.payments.filter(function (x) { return x.id === id; })[0] : null;
     var cat = p ? p.category : 'home';
-    openModal(
-      '<h2>' + (p ? 'Редактировать выплату' : 'Новая выплата') + '</h2>' +
-      '<p class="msub">Регулярный платёж — каждый месяц в один и тот же день.</p>' +
-      '<form id="payForm" novalidate>' +
-      '<div class="fld"><label>Название</label><input id="payTitle" type="text" maxlength="70" placeholder="Например: Аренда квартиры" value="' + (p ? esc(p.title) : '') + '">' +
-      '<div class="err">Дай выплате название</div></div>' +
-      '<div class="grid2"><div class="fld"><label>Сумма</label><div class="awrap"><input id="payAmount" type="number" min="1" placeholder="35000" value="' + (p ? p.amount : '') + '"></div>' +
-      '<div class="err">Укажи сумму</div></div>' +
-      '<div class="fld"><label>День месяца</label><input id="payDay" type="number" min="1" max="31" value="' + (p ? p.day : 1) + '">' +
-      '<div class="err">От 1 до 31</div></div></div>' +
-      '<p class="msub" id="payNext"></p>' +
-      '<div class="fld"><label>Категория</label><div class="chips2" id="payCats">' + chipsHTML('expense', cat) + '</div></div>' +
-      '<div class="macts"><button type="button" class="btn gho" data-action="modal-close">Отмена</button>' +
-      '<button type="submit" class="btn pri">' + (p ? 'Сохранить' : 'Добавить') + '</button></div></form>'
-    );
-    function nextText() {
-      var d = Math.max(1, Math.min(31, parseInt($('#payDay').value, 10) || 1));
-      $('#payNext').textContent = 'Ближайшая выплата: ' + fdf(iso(pinfo({ day: d, active: true, last_paid_month: '' }).due));
-    }
-    $('#payDay').addEventListener('input', nextText);
-    nextText();
-    bindChips($('#payCats'), function (k) { cat = k; });
-    $('#payForm').onsubmit = async function (e) {
-      e.preventDefault();
-      var title = $('#payTitle').value.trim();
-      var amount = parseFloat($('#payAmount').value);
-      var day = parseInt($('#payDay').value, 10);
-      if (!title) { bad('#payTitle', 'Дай выплате название'); return; }
-      if (!amount || amount <= 0) { bad('#payAmount', 'Укажи сумму'); return; }
-      if (!day || day < 1 || day > 31) { bad('#payDay', 'От 1 до 31'); return; }
-      closeModal();
-      await savePayment(p ? p.id : null, { title: title, amount: amount, day: day, category: cat });
+    openModal('<h2>' + (p ? 'Редактировать выплату' : 'Новая выплата') + '</h2><p class="msub">Регулярный платёж каждый месяц.</p>' +
+      '<form id="payForm" novalidate><div class="fld"><label>Название</label><input id="payTitle" type="text" maxlength="70" placeholder="Аренда квартиры" value="' + (p ? esc(p.title) : '') + '"><div class="err">Дай название</div></div>' +
+      '<div class="grid2"><div class="fld"><label>Сумма</label><div class="awrap"><input id="payAmount" type="number" min="1" placeholder="35000" value="' + (p ? p.amount : '') + '"></div><div class="err">Укажи сумму</div></div>' +
+      '<div class="fld"><label>День месяца</label><input id="payDay" type="number" min="1" max="31" value="' + (p ? p.day : 1) + '"><div class="err">От 1 до 31</div></div></div>' +
+      '<p class="msub" id="payNext"></p><div class="fld"><label>Категория</label><div class="chips2" id="payCats">' + chipsHTML('expense', cat) + '</div></div>' +
+      '<div class="macts"><button type="button" class="btn gho" data-action="modal-close">Отмена</button><button type="submit" class="btn pri">' + (p ? 'Сохранить' : 'Добавить') + '</button></div></form>');
+    function nextText() { var d = Math.max(1, Math.min(31, parseInt($('#payDay').value, 10) || 1)); var pn = $('#payNext'); if (pn) pn.textContent = 'Ближайшая: ' + fdf(iso(pinfo({ day: d, active: true, last_paid_month: '' }).due)); }
+    var pd = $('#payDay'); if (pd) pd.addEventListener('input', nextText); nextText();
+    var pc = $('#payCats'); if (pc) bindChips(pc, function (k) { cat = k; });
+    var form = $('#payForm'); if (!form) return;
+    form.onsubmit = async function (e) {
+      e.preventDefault(); var title = $('#payTitle').value.trim(), amount = parseFloat($('#payAmount').value), day = parseInt($('#payDay').value, 10);
+      if (!title) { bad('#payTitle', 'Дай название'); return; } if (!amount || amount <= 0) { bad('#payAmount', 'Укажи сумму'); return; } if (!day || day < 1 || day > 31) { bad('#payDay', 'От 1 до 31'); return; }
+      closeModal(); await savePayment(p ? p.id : null, { title: title, amount: amount, day: day, category: cat });
     };
   }
 
   async function savePayment(id, fields) {
-    var snapshot = clone(S.payments);
-    sync('busy', 'Сохраняем выплату…');
+    var snapshot = clone(S.payments); sync('busy', 'Сохраняем…');
     try {
       var p;
-      if (id) {
-        p = await D.updatePayment(S.user.id, id, fields);
-        S.payments = S.payments.map(function (x) { return x.id === id ? p : x; });
-      } else {
-        p = await D.createPayment(S.user.id, fields);
-        S.payments.push(p);
-      }
-      render();
-      sync('', 'Синхронизировано');
-      toast(id ? 'Выплата обновлена' : 'Выплата добавлена', '🗓️');
-    } catch (e) {
-      S.payments = snapshot;
-      render();
-      sync('err', 'Ошибка');
-      toast(D.errorMessage(e), '⚠️');
-    }
+      if (id) { p = await D.updatePayment(S.user.id, id, fields); S.payments = S.payments.map(function (x) { return x.id === id ? p : x; }); }
+      else { p = await D.createPayment(S.user.id, fields); S.payments.push(p); }
+      render(); sync('', 'Синхронизировано'); toast(id ? 'Выплата обновлена' : 'Выплата добавлена', '🗓️');
+    } catch (e) { S.payments = snapshot; render(); sync('err', 'Ошибка'); toast(D.errorMessage(e), '⚠️'); }
   }
 
   function viewModal() {
-    openModal(
-      '<h2>Сохранить вид</h2><p class="msub">Текущий поиск, фильтры и сортировка сохранятся как быстрый пресет.</p>' +
-      '<form id="viewForm"><div class="fld"><label>Название вида</label>' +
-      '<input id="viewName" type="text" maxlength="40" placeholder="Например: Крупные расходы">' +
-      '<div class="err">Введи название</div></div>' +
-      '<div class="macts"><button type="button" class="btn gho" data-action="modal-close">Отмена</button>' +
-      '<button type="submit" class="btn pri">Сохранить</button></div></form>'
-    );
-    $('#viewForm').onsubmit = function (e) {
-      e.preventDefault();
-      var name = $('#viewName').value.trim();
-      if (!name) { bad('#viewName', 'Введи название'); return; }
-      var v = { id: 'v' + Date.now(), name: name, f: clone(S.f) };
-      S.views.push(v); S.activeView = v.id;
-      saveViews(); closeModal(); render();
-      toast('Вид сохранён', '★');
-    };
+    openModal('<h2>Сохранить вид</h2><p class="msub">Фильтры сохранятся как пресет.</p><form id="viewForm"><div class="fld"><label>Название</label><input id="viewName" type="text" maxlength="40" placeholder="Крупные расходы"><div class="err">Введи название</div></div><div class="macts"><button type="button" class="btn gho" data-action="modal-close">Отмена</button><button type="submit" class="btn pri">Сохранить</button></div></form>');
+    var form = $('#viewForm'); if (!form) return;
+    form.onsubmit = function (e) { e.preventDefault(); var name = $('#viewName').value.trim(); if (!name) { bad('#viewName', 'Введи название'); return; } S.views.push({ id: 'v' + Date.now(), name: name, f: clone(S.f) }); S.activeView = S.views[S.views.length - 1].id; saveViews(); closeModal(); render(); toast('Вид сохранён', '★'); };
   }
 
   function nameModal() {
-    openModal(
-      '<h2>Изменить имя</h2><p class="msub">Так тебя будет видно в личном кабинете.</p>' +
-      '<form id="nameForm"><div class="fld"><label>Имя</label>' +
-      '<input id="nameInput" type="text" maxlength="40" value="' + esc((S.profile && S.profile.display_name) || '') + '">' +
-      '<div class="err">Введи имя</div></div>' +
-      '<div class="macts"><button type="button" class="btn gho" data-action="modal-close">Отмена</button>' +
-      '<button type="submit" class="btn pri">Сохранить</button></div></form>'
-    );
-    $('#nameForm').onsubmit = async function (e) {
-      e.preventDefault();
-      var name = $('#nameInput').value.trim();
-      if (!name) { bad('#nameInput', 'Введи имя'); return; }
-      closeModal();
-      await saveProfile({ display_name: name });
-    };
+    openModal('<h2>Изменить имя</h2><p class="msub">Так тебя будет видно в кабинете.</p><form id="nameForm"><div class="fld"><label>Имя</label><input id="nameInput" type="text" maxlength="40" value="' + esc((S.profile && S.profile.display_name) || '') + '"><div class="err">Введи имя</div></div><div class="macts"><button type="button" class="btn gho" data-action="modal-close">Отмена</button><button type="submit" class="btn pri">Сохранить</button></div></form>');
+    var form = $('#nameForm'); if (!form) return;
+    form.onsubmit = async function (e) { e.preventDefault(); var name = $('#nameInput').value.trim(); if (!name) { bad('#nameInput', 'Введи имя'); return; } closeModal(); await saveProfile({ display_name: name }); };
   }
 
   function changePasswordModal() {
-    openModal(
-      '<h2>Сменить пароль</h2><p class="msub">Введи новый пароль. После сохранения останется текущая сессия.</p>' +
-      '<form id="cpForm"><div class="fld"><label>Новый пароль</label>' +
-      '<input id="cpPass" type="password" minlength="6" placeholder="Минимум 6 символов">' +
-      '<div class="err">Минимум 6 символов</div></div>' +
-      '<div class="macts"><button type="button" class="btn gho" data-action="modal-close">Отмена</button>' +
-      '<button type="submit" class="btn pri">Сохранить</button></div></form>'
-    );
-    $('#cpForm').onsubmit = async function (e) {
-      e.preventDefault();
-      var pass = $('#cpPass').value;
-      if (!pass || pass.length < 6) { bad('#cpPass', 'Минимум 6 символов'); return; }
-      try {
-        await D.updatePassword(pass);
-        closeModal();
-        toast('Пароль обновлён', '🔐');
-      } catch (err) {
-        bad('#cpPass', D.errorMessage(err));
-      }
-    };
+    openModal('<h2>Сменить пароль</h2><p class="msub">Введи новый пароль.</p><form id="cpForm"><div class="fld"><label>Новый пароль</label><input id="cpPass" type="password" minlength="6" placeholder="Минимум 6 символов"><div class="err">Минимум 6 символов</div></div><div class="macts"><button type="button" class="btn gho" data-action="modal-close">Отмена</button><button type="submit" class="btn pri">Сохранить</button></div></form>');
+    var form = $('#cpForm'); if (!form) return;
+    form.onsubmit = async function (e) { e.preventDefault(); var pass = $('#cpPass').value; if (!pass || pass.length < 6) { bad('#cpPass', 'Минимум 6 символов'); return; } try { await D.updatePassword(pass); closeModal(); toast('Пароль обновлён', '🔐'); } catch (err) { bad('#cpPass', D.errorMessage(err)); } };
   }
 
   function confirmModal(title, text, onYes, label) {
-    openModal(
-      '<h2>' + esc(title) + '</h2><p class="msub">' + esc(text) + '</p>' +
-      '<div class="macts"><button class="btn gho" data-action="modal-close">Отмена</button>' +
-      '<button class="btn dan" id="confirmYes">' + esc(label || 'Удалить') + '</button></div>'
-    );
-    $('#confirmYes').onclick = function () { closeModal(); onYes(); };
+    openModal('<h2>' + esc(title) + '</h2><p class="msub">' + esc(text) + '</p><div class="macts"><button class="btn gho" data-action="modal-close">Отмена</button><button class="btn dan" id="confirmYes">' + esc(label || 'Удалить') + '</button></div>');
+    var btn = $('#confirmYes'); if (btn) btn.onclick = function () { closeModal(); onYes(); };
   }
 
   function ecosystemModal() {
-    openModal(
-      '<h2>Экосистема VODOVSKY GROUP</h2>' +
-      '<p class="msub">Один аккаунт · один дизайн · шесть продуктов. Строим поэтапно.</p>' +
-      '<div class="eco">' + ECO.map(function (e) {
-        return '<div class="ecard"><div class="et"><em>' + e.e + '</em><b>' + e.n + '</b>' +
-          '<span class="est ' + (e.live ? 'live' : 'soon') + '">' + (e.live ? 'АКТИВНО' : 'СКОРО') + '</span></div>' +
-          '<p>' + e.d + '</p></div>';
-      }).join('') + '</div>' +
-      '<p class="msub" style="text-align:center;margin:16px 0 0">VODOVSKY GROUP · цифровая экосистема на базе ИИ</p>'
-    );
+    openModal('<h2>Экосистема VODOVSKY GROUP</h2><p class="msub">Один аккаунт · один дизайн · шесть продуктов.</p><div class="eco">' +
+      ECO.map(function (e) { return '<div class="ecard"><div class="et"><em>' + e.e + '</em><b>' + e.n + '</b><span class="est ' + (e.live ? 'live' : 'soon') + '">' + (e.live ? 'АКТИВНО' : 'СКОРО') + '</span></div><p>' + e.d + '</p></div>'; }).join('') +
+      '</div><p class="msub" style="text-align:center;margin:16px 0 0">VODOVSKY GROUP · цифровая экосистема на базе ИИ</p>');
   }
 
-  /* ---------- ДЕЙСТВИЯ: ОПЕРАЦИИ ---------- */
+  /* ==================== ДЕЙСТВИЯ ==================== */
 
   async function addTx(payload) {
     var tempId = 'temp-' + Date.now();
     var temp = Object.assign({ id: tempId, user_id: S.user.id, sort_order: Date.now(), created_at: new Date().toISOString() }, payload);
-    S.transactions.unshift(temp);
-    render();
-    sync('busy', 'Сохраняем операцию…');
-    try {
-      var created = await D.createTransaction(S.user.id, payload);
-      S.transactions = S.transactions.map(function (x) { return x.id === tempId ? created : x; });
-      render();
-      sync('', 'Синхронизировано');
-      toast(payload.type === 'income' ? 'Доход добавлен' : 'Расход добавлен', payload.type === 'income' ? '💰' : '💸');
-    } catch (e) {
-      S.transactions = S.transactions.filter(function (x) { return x.id !== tempId; });
-      render();
-      sync('err', 'Ошибка сохранения');
-      toast(D.errorMessage(e), '⚠️');
-    }
+    S.transactions.unshift(temp); render(); sync('busy', 'Сохраняем…');
+    try { var created = await D.createTransaction(S.user.id, payload); S.transactions = S.transactions.map(function (x) { return x.id === tempId ? created : x; }); render(); sync('', 'Синхронизировано'); toast(payload.type === 'income' ? 'Доход добавлен' : 'Расход добавлен', payload.type === 'income' ? '💰' : '💸'); }
+    catch (e) { S.transactions = S.transactions.filter(function (x) { return x.id !== tempId; }); render(); sync('err', 'Ошибка'); toast(D.errorMessage(e), '⚠️'); }
   }
 
   async function updateTx(id, payload) {
     var snapshot = clone(S.transactions);
-    S.transactions = S.transactions.map(function (x) {
-      return x.id === id ? Object.assign({}, x, payload) : x;
-    });
-    render();
-    sync('busy', 'Сохраняем изменения…');
-    try {
-      var updated = await D.updateTransaction(S.user.id, id, payload);
-      S.transactions = S.transactions.map(function (x) { return x.id === id ? updated : x; });
-      render();
-      closeDrawer();
-      sync('', 'Синхронизировано');
-      toast('Операция обновлена', '✏️');
-    } catch (e) {
-      S.transactions = snapshot;
-      render();
-      sync('err', 'Ошибка');
-      toast(D.errorMessage(e), '⚠️');
-    }
+    S.transactions = S.transactions.map(function (x) { return x.id === id ? Object.assign({}, x, payload) : x; }); render(); sync('busy', 'Сохраняем…');
+    try { var updated = await D.updateTransaction(S.user.id, id, payload); S.transactions = S.transactions.map(function (x) { return x.id === id ? updated : x; }); render(); closeDrawer(); sync('', 'Синхронизировано'); toast('Операция обновлена', '✏️'); }
+    catch (e) { S.transactions = snapshot; render(); sync('err', 'Ошибка'); toast(D.errorMessage(e), '⚠️'); }
   }
 
   async function deleteTx(ids) {
-    var removed = [];
-    ids.forEach(function (id) {
-      var i = S.transactions.findIndex(function (t) { return t.id === id; });
-      if (i >= 0) removed.push({ i: i, t: S.transactions[i] });
-    });
+    var removed = []; ids.forEach(function (id) { var i = S.transactions.findIndex(function (t) { return t.id === id; }); if (i >= 0) removed.push({ i: i, t: S.transactions[i] }); });
     if (!removed.length) return;
-    S.transactions = S.transactions.filter(function (t) { return ids.indexOf(t.id) < 0; });
-    S.sel = S.sel.filter(function (id) { return ids.indexOf(id) < 0; });
-    render();
-    closeDrawer();
-    sync('busy', 'Удаляем…');
+    S.transactions = S.transactions.filter(function (t) { return ids.indexOf(t.id) < 0; }); S.sel = S.sel.filter(function (id) { return ids.indexOf(id) < 0; }); render(); closeDrawer(); sync('busy', 'Удаляем…');
     try {
-      await D.deleteTransactions(S.user.id, ids);
-      sync('', 'Синхронизировано');
-      toast(removed.length > 1 ? 'Удалено операций: ' + removed.length : 'Операция удалена', '🗑️', async function () {
-        try {
-          var restored = await D.restoreTransactions(S.user.id, removed.map(function (r) { return r.t; }));
-          restored.forEach(function (t) { S.transactions.push(t); });
-          S.transactions.sort(function (a, b) { return b.sort_order - a.sort_order; });
-          render();
-          toast('Операции восстановлены', '↩️');
-        } catch (e) {
-          toast(D.errorMessage(e), '⚠️');
-        }
-      });
-    } catch (e) {
-      removed.sort(function (a, b) { return a.i - b.i; }).forEach(function (r) {
-        S.transactions.splice(Math.min(r.i, S.transactions.length), 0, r.t);
-      });
-      render();
-      sync('err', 'Ошибка удаления');
-      toast(D.errorMessage(e), '⚠️');
-    }
+      await D.deleteTransactions(S.user.id, ids); sync('', 'Синхронизировано');
+      toast(removed.length > 1 ? 'Удалено: ' + removed.length : 'Операция удалена', '🗑️', async function () { try { var restored = await D.restoreTransactions(S.user.id, removed.map(function (r) { return r.t; })); restored.forEach(function (t) { S.transactions.push(t); }); S.transactions.sort(function (a, b) { return b.sort_order - a.sort_order; }); render(); toast('Восстановлено', '↩️'); } catch (e) { toast(D.errorMessage(e), '⚠️'); } });
+    } catch (e) { removed.sort(function (a, b) { return a.i - b.i; }).forEach(function (r) { S.transactions.splice(Math.min(r.i, S.transactions.length), 0, r.t); }); render(); sync('err', 'Ошибка'); toast(D.errorMessage(e), '⚠️'); }
   }
 
   async function payNow(id) {
-    var p = S.payments.filter(function (x) { return x.id === id; })[0];
-    if (!p) return;
-    var prevMonth = p.last_paid_month;
-    var month = mk(new Date());
-    var tempId = 'temp-' + Date.now();
-    var temp = {
-      id: tempId, user_id: S.user.id, type: 'expense', amount: p.amount,
-      category: p.category, note: p.title, date: tiso(),
-      sort_order: Date.now(), created_at: new Date().toISOString()
-    };
-    S.transactions.unshift(temp);
-    p.last_paid_month = month;
-    render();
-    sync('busy', 'Проводим оплату…');
+    var p = S.payments.filter(function (x) { return x.id === id; })[0]; if (!p) return;
+    var prevMonth = p.last_paid_month, month = mk(new Date()), tempId = 'temp-' + Date.now();
+    var temp = { id: tempId, user_id: S.user.id, type: 'expense', amount: p.amount, category: p.category, note: p.title, date: tiso(), sort_order: Date.now(), created_at: new Date().toISOString() };
+    S.transactions.unshift(temp); p.last_paid_month = month; render(); sync('busy', 'Оплачиваем…');
     try {
       var res = await D.payPayment(S.user.id, p, month);
-      S.transactions = S.transactions.map(function (x) { return x.id === tempId ? res.transaction : x; });
-      S.payments = S.payments.map(function (x) { return x.id === id ? res.payment : x; });
-      render();
-      sync('', 'Синхронизировано');
-      toast('Оплачено: ' + p.title + ' · ' + fmt(p.amount), '✅', async function () {
-        try {
-          var updated = await D.undoPayment(S.user.id, res.transaction.id, p.id, prevMonth);
-          S.transactions = S.transactions.filter(function (x) { return x.id !== res.transaction.id; });
-          S.payments = S.payments.map(function (x) { return x.id === p.id ? updated : x; });
-          render();
-          toast('Оплата отменена', '↩️');
-        } catch (e) {
-          toast(D.errorMessage(e), '⚠️');
-        }
-      });
-    } catch (e) {
-      S.transactions = S.transactions.filter(function (x) { return x.id !== tempId; });
-      p.last_paid_month = prevMonth;
-      render();
-      sync('err', 'Ошибка оплаты');
-      toast(D.errorMessage(e), '⚠️');
-    }
+      S.transactions = S.transactions.map(function (x) { return x.id === tempId ? res.transaction : x; }); S.payments = S.payments.map(function (x) { return x.id === id ? res.payment : x; }); render(); sync('', 'Синхронизировано');
+      toast('Оплачено: ' + p.title, '✅', async function () { try { var updated = await D.undoPayment(S.user.id, res.transaction.id, p.id, prevMonth); S.transactions = S.transactions.filter(function (x) { return x.id !== res.transaction.id; }); S.payments = S.payments.map(function (x) { return x.id === p.id ? updated : x; }); render(); toast('Оплата отменена', '↩️'); } catch (e) { toast(D.errorMessage(e), '⚠️'); } });
+    } catch (e) { S.transactions = S.transactions.filter(function (x) { return x.id !== tempId; }); p.last_paid_month = prevMonth; render(); sync('err', 'Ошибка'); toast(D.errorMessage(e), '⚠️'); }
   }
 
   async function togglePayment(id, active) {
-    var snapshot = clone(S.payments);
-    S.payments = S.payments.map(function (x) { return x.id === id ? Object.assign({}, x, { active: active }) : x; });
-    render();
-    sync('busy', 'Обновляем выплату…');
-    try {
-      var updated = await D.updatePayment(S.user.id, id, { active: active });
-      S.payments = S.payments.map(function (x) { return x.id === id ? updated : x; });
-      render();
-      sync('', 'Синхронизировано');
-      toast(active ? 'Выплата включена' : 'Выплата на паузе', active ? '▶️' : '⏸️');
-    } catch (e) {
-      S.payments = snapshot;
-      render();
-      sync('err', 'Ошибка');
-      toast(D.errorMessage(e), '⚠️');
-    }
+    var snapshot = clone(S.payments); S.payments = S.payments.map(function (x) { return x.id === id ? Object.assign({}, x, { active: active }) : x; }); render(); sync('busy', 'Обновляем…');
+    try { var updated = await D.updatePayment(S.user.id, id, { active: active }); S.payments = S.payments.map(function (x) { return x.id === id ? updated : x; }); render(); sync('', 'Синхронизировано'); toast(active ? 'Выплата включена' : 'Выплата на паузе', active ? '▶️' : '⏸️'); }
+    catch (e) { S.payments = snapshot; render(); sync('err', 'Ошибка'); toast(D.errorMessage(e), '⚠️'); }
   }
 
   async function deleteGoal(id) {
-    var g = S.goals.filter(function (x) { return x.id === id; })[0];
-    if (!g) return;
-    var snapshot = clone(g);
-    S.goals = S.goals.filter(function (x) { return x.id !== id; });
-    render();
-    closeDrawer();
-    sync('busy', 'Удаляем цель…');
-    try {
-      await D.deleteGoal(S.user.id, id);
-      sync('', 'Синхронизировано');
-      toast('Цель «' + g.title + '» удалена', '🗑️', async function () {
-        try {
-          var restored = await D.restoreGoal(S.user.id, snapshot);
-          restored.photo_url = await D.photoUrl(restored.photo_path);
-          S.goals.unshift(restored);
-          render();
-          toast('Цель восстановлена', '↩️');
-        } catch (e) {
-          toast(D.errorMessage(e), '⚠️');
-        }
-      });
-    } catch (e) {
-      S.goals.unshift(snapshot);
-      render();
-      sync('err', 'Ошибка');
-      toast(D.errorMessage(e), '⚠️');
-    }
+    var g = S.goals.filter(function (x) { return x.id === id; })[0]; if (!g) return;
+    var snapshot = clone(g); S.goals = S.goals.filter(function (x) { return x.id !== id; }); render(); closeDrawer(); sync('busy', 'Удаляем…');
+    try { await D.deleteGoal(S.user.id, id); sync('', 'Синхронизировано'); toast('Цель «' + g.title + '» удалена', '🗑️', async function () { try { var restored = await D.restoreGoal(S.user.id, snapshot); restored.photo_url = await D.photoUrl(restored.photo_path); S.goals.unshift(restored); render(); toast('Цель восстановлена', '↩️'); } catch (e) { toast(D.errorMessage(e), '⚠️'); } }); }
+    catch (e) { S.goals.unshift(snapshot); render(); sync('err', 'Ошибка'); toast(D.errorMessage(e), '⚠️'); }
   }
 
   async function deletePayment(id) {
-    var p = S.payments.filter(function (x) { return x.id === id; })[0];
-    if (!p) return;
-    var snapshot = clone(p);
-    S.payments = S.payments.filter(function (x) { return x.id !== id; });
-    render();
-    sync('busy', 'Удаляем выплату…');
-    try {
-      await D.deletePayment(S.user.id, id);
-      sync('', 'Синхронизировано');
-      toast('Выплата «' + p.title + '» удалена', '🗑️', async function () {
-        try {
-          var restored = await D.restorePayment(S.user.id, snapshot);
-          S.payments.push(restored);
-          render();
-          toast('Выплата восстановлена', '↩️');
-        } catch (e) {
-          toast(D.errorMessage(e), '⚠️');
-        }
-      });
-    } catch (e) {
-      S.payments.unshift(snapshot);
-      render();
-      sync('err', 'Ошибка');
-      toast(D.errorMessage(e), '⚠️');
-    }
+    var p = S.payments.filter(function (x) { return x.id === id; })[0]; if (!p) return;
+    var snapshot = clone(p); S.payments = S.payments.filter(function (x) { return x.id !== id; }); render(); sync('busy', 'Удаляем…');
+    try { await D.deletePayment(S.user.id, id); sync('', 'Синхронизировано'); toast('Выплата «' + p.title + '» удалена', '🗑️', async function () { try { var restored = await D.restorePayment(S.user.id, snapshot); S.payments.push(restored); render(); toast('Восстановлено', '↩️'); } catch (e) { toast(D.errorMessage(e), '⚠️'); } }); }
+    catch (e) { S.payments.unshift(snapshot); render(); sync('err', 'Ошибка'); toast(D.errorMessage(e), '⚠️'); }
   }
 
-  /* ---------- DRAWER ---------- */
+  /* ==================== DRAWER ==================== */
 
   function openDrawer(type, id) {
-    S.drawer = { type: type, id: id };
-    var html = '';
+    S.drawer = { type: type, id: id }; var html = '';
     if (type === 'tx') {
-      var t = S.transactions.filter(function (x) { return x.id === id; })[0];
-      if (!t) { closeDrawer(); return; }
+      var t = S.transactions.filter(function (x) { return x.id === id; })[0]; if (!t) { closeDrawer(); return; }
       var c = CM[t.category] || CM.other;
-      html =
-        '<div class="dh"><b>Операция</b><button class="icon-btn" data-action="drawer-close">✕</button></div>' +
-        '<div class="db"><span class="tic" style="background:' + ha(c.c, .15) + ';width:56px;height:56px;font-size:26px;border-radius:18px">' + c.e + '</span>' +
-        '<div class="damt ' + (t.type === 'income' ? 'in' : 'out') + '">' + (t.type === 'income' ? '+' : '−') + ' ' + fmt(t.amount) + '</div>' +
-        '<div style="margin-top:8px"><span class="bdg ' + (t.type === 'income' ? 'paid' : 'over') + '">' + (t.type === 'income' ? 'ДОХОД' : 'РАСХОД') + '</span></div>' +
-        '<div class="drows"><div class="dr"><span>Категория</span><b>' + c.e + ' ' + c.n + '</b></div>' +
-        '<div class="dr"><span>Дата</span><b>' + fdf(t.date) + '</b></div>' +
-        '<div class="dr"><span>Записано</span><b>' + rel(t.date) + '</b></div></div>' +
-        (t.note ? '<div class="dnote">' + esc(t.note) + '</div>' : '') + '</div>' +
-        '<div class="df"><button class="btn gho" data-action="duplicate-tx" data-id="' + t.id + '">Дубль</button>' +
-        '<button class="btn pri" data-action="edit-tx" data-id="' + t.id + '">Изменить</button>' +
-        '<button class="btn dan" data-action="delete-tx" data-id="' + t.id + '">🗑</button></div>';
+      html = '<div class="dh"><b>Операция</b><button class="icon-btn" data-action="drawer-close">✕</button></div><div class="db"><span class="tic" style="background:' + ha(c.c, .15) + ';width:56px;height:56px;font-size:26px;border-radius:18px">' + c.e + '</span><div class="damt ' + (t.type === 'income' ? 'in' : 'out') + '">' + (t.type === 'income' ? '+' : '−') + ' ' + fmt(t.amount) + '</div><div style="margin-top:8px"><span class="bdg ' + (t.type === 'income' ? 'paid' : 'over') + '">' + (t.type === 'income' ? 'ДОХОД' : 'РАСХОД') + '</span></div><div class="drows"><div class="dr"><span>Категория</span><b>' + c.e + ' ' + c.n + '</b></div><div class="dr"><span>Дата</span><b>' + fdf(t.date) + '</b></div><div class="dr"><span>Записано</span><b>' + rel(t.date) + '</b></div></div>' + (t.note ? '<div class="dnote">' + esc(t.note) + '</div>' : '') + '</div><div class="df"><button class="btn gho" data-action="duplicate-tx" data-id="' + t.id + '">Дубль</button><button class="btn pri" data-action="edit-tx" data-id="' + t.id + '">Изменить</button><button class="btn dan" data-action="delete-tx" data-id="' + t.id + '">🗑</button></div>';
     } else {
-      var g = S.goals.filter(function (x) { return x.id === id; })[0];
-      if (!g) { closeDrawer(); return; }
+      var g = S.goals.filter(function (x) { return x.id === id; })[0]; if (!g) { closeDrawer(); return; }
       var p = pct(g), cover = goalCover(g);
-      html =
-        '<div class="dh"><b>Цель</b><button class="icon-btn" data-action="drawer-close">✕</button></div>' +
-        '<div class="db"><div class="dcov">' +
-        (cover ? '<img src="' + esc(cover) + '" alt="' + esc(g.title) + '">' :
-          '<div style="height:100%;display:grid;place-items:center;font-size:52px;background:linear-gradient(135deg,' + ha('#4D9FFF', .35) + ',' + ha('#A78BFA', .35) + ')">🎯</div>') +
-        '</div><h2 style="font-size:20px;font-weight:800">' + esc(g.title) + '</h2>' +
-        '<div style="display:flex;align-items:center;gap:16px;margin:14px 0">' +
-        '<div style="position:relative;width:86px;height:86px;flex:none">' +
-        '<svg width="86" height="86" viewBox="0 0 86 86" style="transform:rotate(-90deg)">' +
-        '<circle cx="43" cy="43" r="36" fill="none" stroke="var(--ln)" stroke-width="9"/>' +
-        '<circle cx="43" cy="43" r="36" fill="none" stroke="' + (p >= 100 ? 'var(--mint)' : 'var(--brand)') + '" stroke-width="9" stroke-linecap="round" stroke-dasharray="' + (p * 2.262) + ' 226.2"/></svg>' +
-        '<b style="position:absolute;inset:0;display:grid;place-items:center;font-size:16px">' + Math.round(p) + '%</b></div>' +
-        '<div><div style="font-size:24px;font-weight:800">' + fmt(g.saved) + '</div>' +
-        '<div style="font-size:12.5px;font-weight:600;color:var(--mu)">из ' + fmt(g.target) + ' · осталось ' + fmt(Math.max(g.target - g.saved, 0)) + '</div></div></div>' +
-        '<div class="bar' + (p >= 100 ? ' g' : '') + '"><i style="width:' + p + '%"></i></div>' +
-        '<div class="drows" style="margin-top:16px"><div class="dr"><span>Создана</span><b>' + fd(iso(new Date(g.created_at))) + '</b></div>' +
-        '<div class="dr"><span>Срок</span><b>' + (g.deadline ? fdf(g.deadline) : 'Не указан') + '</b></div>' +
-        '<div class="dr"><span>Статус</span><b>' + (p >= 100 ? '✓ Достигнута' : 'В процессе') + '</b></div></div></div>' +
-        '<div class="df"><button class="btn pri" data-action="fund-goal" data-id="' + g.id + '"' + (p >= 100 ? ' disabled' : '') + '>＋ Пополнить</button>' +
-        '<button class="btn gho" data-action="edit-goal" data-id="' + g.id + '">✎</button>' +
-        '<button class="btn dan" data-action="delete-goal" data-id="' + g.id + '">🗑</button></div>';
+      html = '<div class="dh"><b>Цель</b><button class="icon-btn" data-action="drawer-close">✕</button></div><div class="db"><div class="dcov">' + (cover ? '<img src="' + esc(cover) + '" alt="' + esc(g.title) + '">' : '<div style="height:100%;display:grid;place-items:center;font-size:52px;background:linear-gradient(135deg,' + ha('#4D9FFF', .35) + ',' + ha('#A78BFA', .35) + ')">🎯</div>') + '</div><h2 style="font-size:20px;font-weight:800">' + esc(g.title) + '</h2><div style="display:flex;align-items:center;gap:16px;margin:14px 0"><div style="position:relative;width:86px;height:86px;flex:none"><svg width="86" height="86" viewBox="0 0 86 86" style="transform:rotate(-90deg)"><circle cx="43" cy="43" r="36" fill="none" stroke="var(--ln)" stroke-width="9"/><circle cx="43" cy="43" r="36" fill="none" stroke="' + (p >= 100 ? 'var(--mint)' : 'var(--brand)') + '" stroke-width="9" stroke-linecap="round" stroke-dasharray="' + (p * 2.262) + ' 226.2"/></svg><b style="position:absolute;inset:0;display:grid;place-items:center;font-size:16px">' + Math.round(p) + '%</b></div><div><div style="font-size:24px;font-weight:800">' + fmt(g.saved) + '</div><div style="font-size:12.5px;font-weight:600;color:var(--mu)">из ' + fmt(g.target) + ' · осталось ' + fmt(Math.max(g.target - g.saved, 0)) + '</div></div></div><div class="bar' + (p >= 100 ? ' g' : '') + '"><i style="width:' + p + '%"></i></div><div class="drows" style="margin-top:16px"><div class="dr"><span>Создана</span><b>' + fd(iso(new Date(g.created_at))) + '</b></div><div class="dr"><span>Срок</span><b>' + (g.deadline ? fdf(g.deadline) : 'Не указан') + '</b></div><div class="dr"><span>Статус</span><b>' + (p >= 100 ? '✓ Достигнута' : 'В процессе') + '</b></div></div></div><div class="df"><button class="btn pri" data-action="fund-goal" data-id="' + g.id + '"' + (p >= 100 ? ' disabled' : '') + '>＋ Пополнить</button><button class="btn gho" data-action="edit-goal" data-id="' + g.id + '">✎</button><button class="btn dan" data-action="delete-goal" data-id="' + g.id + '">🗑</button></div>';
     }
-    $('#drawerRoot').innerHTML =
-      '<div class="dov"><div class="scrim" data-action="drawer-close"></div><div class="drawer">' + html + '</div></div>';
+    var root = $('#drawerRoot'); if (root) root.innerHTML = '<div class="dov"><div class="scrim" data-action="drawer-close"></div><div class="drawer">' + html + '</div></div>';
   }
 
-  function closeDrawer() {
-    S.drawer = null;
-    $('#drawerRoot').innerHTML = '';
-  }
+  function closeDrawer() { S.drawer = null; var root = $('#drawerRoot'); if (root) root.innerHTML = ''; }
 
-  /* ---------- ПРОФИЛЬ / ДАННЫЕ ---------- */
+  /* ==================== ПРОФИЛЬ / ДАННЫЕ ==================== */
 
   async function saveProfile(patch) {
-    var snapshot = clone(S.profile);
-    S.profile = Object.assign({}, S.profile, patch);
-    applyTheme();
-    render();
-    sync('busy', 'Сохраняем профиль…');
-    try {
-      var updated = await D.saveProfile(S.user.id, patch);
-      S.profile = updated;
-      applyTheme();
-      render();
-      sync('', 'Синхронизировано');
-      toast('Настройки сохранены', '⚙️');
-    } catch (e) {
-      S.profile = snapshot;
-      applyTheme();
-      render();
-      sync('err', 'Ошибка');
-      toast(D.errorMessage(e), '⚠️');
-    }
+    var snapshot = clone(S.profile); S.profile = Object.assign({}, S.profile, patch); applyTheme(); render(); sync('busy', 'Сохраняем…');
+    try { var updated = await D.saveProfile(S.user.id, patch); S.profile = updated; applyTheme(); render(); sync('', 'Синхронизировано'); toast('Настройки сохранены', '⚙️'); }
+    catch (e) { S.profile = snapshot; applyTheme(); render(); sync('err', 'Ошибка'); toast(D.errorMessage(e), '⚠️'); }
   }
 
   function viewsKey() { return 'vodovsky.views.' + (S.user ? S.user.id : 'anon'); }
-  function loadViews() {
-    try { S.views = JSON.parse(localStorage.getItem(viewsKey()) || '[]'); }
-    catch (e) { S.views = []; }
-  }
-  function saveViews() {
-    try { localStorage.setItem(viewsKey(), JSON.stringify(S.views)); }
-    catch (e) { toast('Не удалось сохранить вид', '⚠️'); }
-  }
+  function loadViews() { try { S.views = JSON.parse(localStorage.getItem(viewsKey()) || '[]'); } catch (e) { S.views = []; } }
+  function saveViews() { try { localStorage.setItem(viewsKey(), JSON.stringify(S.views)); } catch (e) {} }
 
   function exportData() {
-    var payload = D.buildExport(S.profile, {
-      transactions: S.transactions,
-      goals: S.goals,
-      payments: S.payments
-    });
+    var payload = D.buildExport(S.profile, { transactions: S.transactions, goals: S.goals, payments: S.payments });
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'vodovsky-money-' + tiso() + '.json';
-    a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
-    toast('Резервная копия скачана', '💾');
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'vodovsky-money-' + tiso() + '.json'; a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000); toast('Копия скачана', '💾');
   }
 
   async function importData(file) {
-    var text = await file.text();
-    var data = JSON.parse(text);
-    if (!data || !Array.isArray(data.transactions) || !Array.isArray(data.goals) || !Array.isArray(data.payments)) {
-      throw new Error('Файл не похож на резервную копию VODOVSKY');
-    }
-    confirmModal('Загрузить резервную копию?', 'Текущие операции, цели и выплаты будут заменены данными из файла. Аккаунт останется прежним.', async function () {
-      var snapshot = { transactions: clone(S.transactions), goals: clone(S.goals), payments: clone(S.payments) };
-      sync('busy', 'Загружаем копию…');
+    var text = await file.text(); var data = JSON.parse(text);
+    if (!data || !Array.isArray(data.transactions) || !Array.isArray(data.goals) || !Array.isArray(data.payments)) throw new Error('Неверный формат файла');
+    confirmModal('Загрузить копию?', 'Текущие данные будут заменены.', async function () {
+      var snap = { t: clone(S.transactions), g: clone(S.goals), p: clone(S.payments) }; sync('busy', 'Загружаем…');
       try {
         await D.clearAll(S.user.id);
         if (data.transactions.length) await D.restoreTransactions(S.user.id, data.transactions);
-        for (var i = 0; i < data.goals.length; i++) {
-          var g = clone(data.goals[i]);
-          g.photo_path = null;
-          await D.restoreGoal(S.user.id, g);
-        }
-        for (var j = 0; j < data.payments.length; j++) {
-          await D.restorePayment(S.user.id, data.payments[j]);
-        }
-        var fresh = await D.loadAll(S.user.id);
-        S.transactions = fresh.transactions;
-        S.goals = await D.attachPhotos(fresh.goals);
-        S.payments = fresh.payments;
-        render();
-        sync('', 'Синхронизировано');
-        toast('Копия загружена', '📥', async function () {
-          try {
-            await D.clearAll(S.user.id);
-            if (snapshot.transactions.length) await D.restoreTransactions(S.user.id, snapshot.transactions);
-            for (var k = 0; k < snapshot.goals.length; k++) await D.restoreGoal(S.user.id, snapshot.goals[k]);
-            for (var m = 0; m < snapshot.payments.length; m++) await D.restorePayment(S.user.id, snapshot.payments[m]);
-            var back = await D.loadAll(S.user.id);
-            S.transactions = back.transactions;
-            S.goals = await D.attachPhotos(back.goals);
-            S.payments = back.payments;
-            render();
-            toast('Загрузка копии отменена', '↩️');
-          } catch (e) {
-            toast(D.errorMessage(e), '⚠️');
-          }
-        });
-      } catch (e) {
-        sync('err', 'Ошибка загрузки');
-        toast(D.errorMessage(e), '⚠️');
-      }
+        for (var i = 0; i < data.goals.length; i++) { var g = clone(data.goals[i]); g.photo_path = null; await D.restoreGoal(S.user.id, g); }
+        for (var j = 0; j < data.payments.length; j++) await D.restorePayment(S.user.id, data.payments[j]);
+        var fresh = await D.loadAll(S.user.id); S.transactions = fresh.transactions; S.goals = await D.attachPhotos(fresh.goals); S.payments = fresh.payments; render(); sync('', 'Синхронизировано'); toast('Копия загружена', '📥');
+      } catch (e) { sync('err', 'Ошибка'); toast(D.errorMessage(e), '⚠️'); }
     }, 'Загрузить');
   }
 
   async function wipeData() {
-    var snapshot = { transactions: clone(S.transactions), goals: clone(S.goals), payments: clone(S.payments) };
-    sync('busy', 'Очищаем данные…');
+    var snap = { t: clone(S.transactions), g: clone(S.goals), p: clone(S.payments) }; sync('busy', 'Очищаем…');
     try {
-      await D.clearAll(S.user.id);
-      S.transactions = []; S.goals = []; S.payments = []; S.sel = [];
-      render();
-      sync('', 'Синхронизировано');
-      toast('Все данные очищены', '🧹', async function () {
-        try {
-          if (snapshot.transactions.length) await D.restoreTransactions(S.user.id, snapshot.transactions);
-          for (var i = 0; i < snapshot.goals.length; i++) await D.restoreGoal(S.user.id, snapshot.goals[i]);
-          for (var j = 0; j < snapshot.payments.length; j++) await D.restorePayment(S.user.id, snapshot.payments[j]);
-          var fresh = await D.loadAll(S.user.id);
-          S.transactions = fresh.transactions;
-          S.goals = await D.attachPhotos(fresh.goals);
-          S.payments = fresh.payments;
-          render();
-          toast('Данные восстановлены', '↩️');
-        } catch (e) {
-          toast(D.errorMessage(e), '⚠️');
-        }
-      });
-    } catch (e) {
-      sync('err', 'Ошибка');
-      toast(D.errorMessage(e), '⚠️');
-    }
+      await D.clearAll(S.user.id); S.transactions = []; S.goals = []; S.payments = []; S.sel = []; render(); sync('', 'Синхронизировано');
+      toast('Данные очищены', '🧹', async function () { try { if (snap.t.length) await D.restoreTransactions(S.user.id, snap.t); for (var i = 0; i < snap.g.length; i++) await D.restoreGoal(S.user.id, snap.g[i]); for (var j = 0; j < snap.p.length; j++) await D.restorePayment(S.user.id, snap.p[j]); var fresh = await D.loadAll(S.user.id); S.transactions = fresh.transactions; S.goals = await D.attachPhotos(fresh.goals); S.payments = fresh.payments; render(); toast('Восстановлено', '↩️'); } catch (e) { toast(D.errorMessage(e), '⚠️'); } });
+    } catch (e) { sync('err', 'Ошибка'); toast(D.errorMessage(e), '⚠️'); }
   }
 
-  /* ---------- СОБЫТИЯ ---------- */
+  /* ==================== СОБЫТИЯ ==================== */
 
   function onClick(e) {
     var routeEl = e.target.closest('[data-route]');
-    if (routeEl) {
-      navigate(routeEl.dataset.route);
-      return;
-    }
-
+    if (routeEl) { navigate(routeEl.dataset.route); return; }
     var el = e.target.closest('[data-action]');
     if (!el) return;
     var a = el.dataset.action, id = el.dataset.id;
-
-    if (a === 'toggle-menu') openMenu();
-    else if (a === 'theme') {
-      var next = (S.profile && S.profile.theme) === 'light' ? 'dark' : 'light';
-      saveProfile({ theme: next });
-    }
-    else if (a === 'logout') doLogout();
-    else if (a === 'retry') boot();
-    else if (a === 'ecosystem') ecosystemModal();
-    else if (a === 'hide-banner') {
-      el.closest('.banner').style.display = 'none';
-      toast('Баннер скрыт до обновления страницы', '👌');
-    }
-    else if (a === 'new-tx') txModal();
-    else if (a === 'edit-tx') { closeDrawer(); txModal(id); }
-    else if (a === 'open-tx') openDrawer('tx', id);
-    else if (a === 'delete-tx') deleteTx([id]);
-    else if (a === 'duplicate-tx') {
-      var t = S.transactions.filter(function (x) { return x.id === id; })[0];
-      if (t) addTx({ type: t.type, amount: t.amount, category: t.category, note: t.note, date: tiso() });
-    }
-    else if (a === 'bulk-delete') {
-      var ids = S.sel.slice();
-      confirmModal('Удалить операции (' + ids.length + ')?', 'Их можно будет вернуть кнопкой «Отменить».', function () { deleteTx(ids); });
-    }
-    else if (a === 'bulk-clear') { S.sel = []; renderTxList(); }
-    else if (a === 'tx-type') {
-      S.f.type = el.dataset.type; S.f.cat = 'all'; S.activeView = null; render();
-    }
-    else if (a === 'save-view') viewModal();
-    else if (a === 'del-view') {
-      S.views = S.views.filter(function (x) { return x.id !== S.activeView; });
-      S.activeView = null; saveViews(); render();
-      toast('Вид удалён', '🗑️');
-    }
-    else if (a === 'chart-days') { S.days = parseInt(el.dataset.days, 10); render(); }
-    else if (a === 'new-goal') goalModal();
-    else if (a === 'edit-goal') { closeDrawer(); goalModal(id); }
-    else if (a === 'open-goal') openDrawer('goal', id);
-    else if (a === 'fund-goal') { e.stopPropagation(); fundModal(id); }
-    else if (a === 'delete-goal') deleteGoal(id);
-    else if (a === 'new-payment') paymentModal();
-    else if (a === 'edit-payment') paymentModal(id);
-    else if (a === 'pay-now') payNow(id);
-    else if (a === 'delete-payment') deletePayment(id);
-    else if (a === 'edit-name') nameModal();
-    else if (a === 'change-password') changePasswordModal();
-    else if (a === 'export') exportData();
-    else if (a === 'import') $('#importFile').click();
-    else if (a === 'wipe') {
-      confirmModal('Очистить все данные?', 'Все операции, цели и выплаты будут удалены. Аккаунт останется. Сразу после удаления можно нажать «Отменить».', wipeData, 'Очистить всё');
-    }
-    else if (a === 'modal-close') closeModal();
-    else if (a === 'drawer-close') closeDrawer();
-    else if (a === 'undo') {
-      var fn = UNDO[id];
-      if (fn) { delete UNDO[id]; fn(); }
-      var tt = $('#' + id);
-      if (tt) tt.remove();
-    }
-    else if (a === 'toast-close') {
-      var t2 = $('#' + id);
-      if (t2) t2.remove();
-      delete UNDO[id];
+    switch (a) {
+      case 'toggle-menu': openMenu(); break;
+      case 'theme': saveProfile({ theme: (S.profile && S.profile.theme) === 'light' ? 'dark' : 'light' }); break;
+      case 'logout': doLogout(); break;
+      case 'retry': boot(); break;
+      case 'ecosystem': ecosystemModal(); break;
+      case 'hide-banner': var bn = el.closest('.banner'); if (bn) bn.style.display = 'none'; break;
+      case 'new-tx': txModal(); break;
+      case 'edit-tx': closeDrawer(); txModal(id); break;
+      case 'open-tx': openDrawer('tx', id); break;
+      case 'delete-tx': deleteTx([id]); break;
+      case 'duplicate-tx': var dt = S.transactions.filter(function (x) { return x.id === id; })[0]; if (dt) addTx({ type: dt.type, amount: dt.amount, category: dt.category, note: dt.note, date: tiso() }); break;
+      case 'bulk-delete': var ids = S.sel.slice(); confirmModal('Удалить (' + ids.length + ')?', 'Можно вернуть кнопкой «Отменить».', function () { deleteTx(ids); }); break;
+      case 'bulk-clear': S.sel = []; renderTxList(); break;
+      case 'tx-type': S.f.type = el.dataset.type; S.f.cat = 'all'; S.activeView = null; render(); break;
+      case 'save-view': viewModal(); break;
+      case 'del-view': S.views = S.views.filter(function (x) { return x.id !== S.activeView; }); S.activeView = null; saveViews(); render(); toast('Вид удалён', '🗑️'); break;
+      case 'chart-days': S.days = parseInt(el.dataset.days, 10); render(); break;
+      case 'new-goal': goalModal(); break;
+      case 'edit-goal': closeDrawer(); goalModal(id); break;
+      case 'open-goal': openDrawer('goal', id); break;
+      case 'fund-goal': e.stopPropagation(); fundModal(id); break;
+      case 'delete-goal': deleteGoal(id); break;
+      case 'new-payment': paymentModal(); break;
+      case 'edit-payment': paymentModal(id); break;
+      case 'pay-now': payNow(id); break;
+      case 'delete-payment': deletePayment(id); break;
+      case 'edit-name': nameModal(); break;
+      case 'change-password': changePasswordModal(); break;
+      case 'export': exportData(); break;
+      case 'import': var imp = $('#importFile'); if (imp) imp.click(); break;
+      case 'wipe': confirmModal('Очистить все данные?', 'Операции, цели и выплаты будут удалены. Аккаунт останется.', wipeData, 'Очистить всё'); break;
+      case 'modal-close': closeModal(); break;
+      case 'drawer-close': closeDrawer(); break;
+      case 'undo': var fn = UNDO[id]; if (fn) { delete UNDO[id]; fn(); } var tt = $('#' + id); if (tt) tt.remove(); break;
+      case 'toast-close': var t2 = $('#' + id); if (t2) t2.remove(); delete UNDO[id]; break;
     }
   }
 
   function onChange(e) {
-    var el = e.target;
-    var action = el.dataset.change;
-    if (action === 'select-tx') {
-      var i = S.sel.indexOf(el.dataset.id);
-      if (el.checked && i < 0) S.sel.push(el.dataset.id);
-      if (!el.checked && i >= 0) S.sel.splice(i, 1);
-      renderTxList();
-    }
+    var el = e.target, action = el.dataset.change;
+    if (action === 'select-tx') { var i = S.sel.indexOf(el.dataset.id); if (el.checked && i < 0) S.sel.push(el.dataset.id); if (!el.checked && i >= 0) S.sel.splice(i, 1); renderTxList(); }
     else if (action === 'toggle-payment') togglePayment(el.dataset.id, el.checked);
     else if (action === 'theme-select') saveProfile({ theme: el.value });
     else if (action === 'currency-select') saveProfile({ currency: el.value });
   }
 
-  function onKeydown(e) {
-    if (e.key === 'Escape') {
-      if ($('#modalRoot').innerHTML) closeModal();
-      else if (S.drawer) closeDrawer();
-      else closeMenu();
-    }
-  }
+  function onKeydown(e) { if (e.key === 'Escape') { if ($('#modalRoot') && $('#modalRoot').innerHTML) closeModal(); else if (S.drawer) closeDrawer(); else closeMenu(); } }
 
-  /* Drag & drop для ручного порядка */
   var dragId = null;
-  function onDragStart(e) {
-    var r = e.target.closest('[data-drag]');
-    if (!r) return;
-    dragId = r.dataset.drag;
-    r.classList.add('drag');
-    e.dataTransfer.effectAllowed = 'move';
-    try { e.dataTransfer.setData('text/plain', dragId); } catch (x) {}
-  }
-  function onDragEnd() {
-    dragId = null;
-    $$('.trow').forEach(function (r) { r.classList.remove('drag', 'above', 'below'); });
-  }
-  function onDragOver(e) {
-    var r = e.target.closest('[data-drag]');
-    if (!r || !dragId || r.dataset.drag === dragId) return;
-    e.preventDefault();
-    var b = r.getBoundingClientRect();
-    $$('.trow').forEach(function (x) { x.classList.remove('above', 'below'); });
-    r.classList.add(e.clientY < b.top + b.height / 2 ? 'above' : 'below');
-  }
+  function onDragStart(e) { var r = e.target.closest('[data-drag]'); if (!r) return; dragId = r.dataset.drag; r.classList.add('drag'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragId); } catch (x) {} }
+  function onDragEnd() { dragId = null; $$('.trow').forEach(function (r) { r.classList.remove('drag', 'above', 'below'); }); }
+  function onDragOver(e) { var r = e.target.closest('[data-drag]'); if (!r || !dragId || r.dataset.drag === dragId) return; e.preventDefault(); var b = r.getBoundingClientRect(); $$('.trow').forEach(function (x) { x.classList.remove('above', 'below'); }); r.classList.add(e.clientY < b.top + b.height / 2 ? 'above' : 'below'); }
   async function onDrop(e) {
-    var r = e.target.closest('[data-drag]');
-    if (!r || !dragId) return;
-    e.preventDefault();
-    var arr = filtered();
-    var from = arr.findIndex(function (t) { return t.id === dragId; });
-    var to = arr.findIndex(function (t) { return t.id === r.dataset.drag; });
+    var r = e.target.closest('[data-drag]'); if (!r || !dragId) return; e.preventDefault();
+    var arr = filtered(), from = arr.findIndex(function (t) { return t.id === dragId; }), to = arr.findIndex(function (t) { return t.id === r.dataset.drag; });
     if (from < 0 || to < 0) return;
     var before = e.clientY < r.getBoundingClientRect().top + r.getBoundingClientRect().height / 2;
-    var item = arr.splice(from, 1)[0];
-    if (!before) to++;
-    if (from < to) to--;
-    arr.splice(to, 0, item);
-
-    var base = Date.now();
-    var updates = arr.map(function (t, i) {
-      return { id: t.id, sort_order: base + (arr.length - i) };
-    });
+    var item = arr.splice(from, 1)[0]; if (!before) to++; if (from < to) to--; arr.splice(to, 0, item);
+    var base = Date.now(), updates = arr.map(function (t, i) { return { id: t.id, sort_order: base + (arr.length - i) }; });
     var snapshot = clone(S.transactions);
-    updates.forEach(function (u) {
-      S.transactions = S.transactions.map(function (t) {
-        return t.id === u.id ? Object.assign({}, t, { sort_order: u.sort_order }) : t;
-      });
-    });
-    renderTxList();
-    sync('busy', 'Сохраняем порядок…');
-    try {
-      await D.reorderTransactions(S.user.id, updates);
-      sync('', 'Синхронизировано');
-      toast('Порядок обновлён', '↕');
-    } catch (err) {
-      S.transactions = snapshot;
-      renderTxList();
-      sync('err', 'Ошибка');
-      toast(D.errorMessage(err), '⚠️');
-    }
+    updates.forEach(function (u) { S.transactions = S.transactions.map(function (t) { return t.id === u.id ? Object.assign({}, t, { sort_order: u.sort_order }) : t; }); });
+    renderTxList(); sync('busy', 'Сохраняем порядок…');
+    try { await D.reorderTransactions(S.user.id, updates); sync('', 'Синхронизировано'); toast('Порядок обновлён', '↕'); }
+    catch (err) { S.transactions = snapshot; renderTxList(); sync('err', 'Ошибка'); toast(D.errorMessage(err), '⚠️'); }
   }
 
   function bindEvents() {
@@ -1919,35 +984,23 @@
     document.addEventListener('dragend', onDragEnd);
     document.addEventListener('dragover', onDragOver);
     document.addEventListener('drop', onDrop);
-
-    $('#menuScrim').addEventListener('click', closeMenu);
-    $('#loginForm').addEventListener('submit', doLogin);
-    $('#registerForm').addEventListener('submit', doRegister);
-    $('#forgotBtn').addEventListener('click', forgotModal);
-    $$('[data-auth-tab]').forEach(function (b) {
-      b.addEventListener('click', function () { authTab(b.dataset.authTab); });
-    });
-    $('#importFile').addEventListener('change', function () {
-      var f = $('#importFile').files[0];
-      if (!f) return;
-      importData(f).catch(function (err) { toast(D.errorMessage(err), '⚠️'); });
-      $('#importFile').value = '';
-    });
-    window.addEventListener('resize', deb(function () {
-      if (S.route === 'dashboard') { S.chart.p = 1; mountChart(); }
-    }, 180));
+    var ms = $('#menuScrim'); if (ms) ms.addEventListener('click', closeMenu);
+    var lf = $('#loginForm'); if (lf) lf.addEventListener('submit', doLogin);
+    var rf = $('#registerForm'); if (rf) rf.addEventListener('submit', doRegister);
+    var fb = $('#forgotBtn'); if (fb) fb.addEventListener('click', forgotModal);
+    $$('[data-auth-tab]').forEach(function (b) { b.addEventListener('click', function () { authTab(b.dataset.authTab); }); });
+    var imp = $('#importFile'); if (imp) imp.addEventListener('change', function () { var f = imp.files[0]; if (!f) return; importData(f).catch(function (err) { toast(D.errorMessage(err), '⚠️'); }); imp.value = ''; });
+    window.addEventListener('resize', deb(function () { if (S.route === 'dashboard') { S.chart.p = 1; mountChart(); } }, 180));
   }
 
-  /* ---------- СТАРТ ---------- */
+  /* ==================== СТАРТ ==================== */
 
   if (!window.VData) {
     screen('setupScreen');
     var p = $('.setup-card p.muted');
     if (p) p.textContent = 'Файл data.js не найден. Положи его рядом с index.html.';
   } else {
-    applyTheme();
-    bindEvents();
-    boot();
+    applyTheme(); bindEvents(); boot();
   }
 
 })();
