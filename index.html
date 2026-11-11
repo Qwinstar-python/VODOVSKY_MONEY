@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1C1C1E">
 <title>Финансы</title>
+<script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{--bg:#1C1C1E;--card:#2C2C2E;--yellow:#FFDD2D;--text:#FFF;--muted:#8E8E93;--green:#30D158;--red:#FF453A;--line:#3A3A3C;--shadow:rgba(0,0,0,.3)}
@@ -199,8 +200,6 @@ svg{width:100%;height:auto;display:block}
 </nav>
 
 <script>
-const SB_URL='https://gxeoamheotruzpletctu.supabase.co';
-const SB_KEY='sb_publishable_CL-rbV-FHbyhOyakCVDreA_lYXL6RIA';
 const CATS={in:{'Зарплата':'💼','Купоны облигаций':'🏦','Дивиденды':'📈','Проценты и вклады':'🪙','Продажа бумаг':'📊','Прочий доход':'➕'},out:{'Продукты':'🛒','Жильё и ЖКХ':'🏠','Транспорт':'🚌','Связь':'📱','Кафе':'🍔','Развлечения':'🎬','Здоровье':'💊','Одежда':'👕','Покупка бумаг':'📥','Прочее':'📦'}};
 const PASSIVE=['Купоны облигаций','Дивиденды','Проценты и вклады'];
 let sb,user=null,data=[],goals=[],schedule=[],type='out',tempImg=null,migAsked=false;
@@ -408,7 +407,8 @@ function renderAll(){renderOps();if($('tab-analytics').classList.contains('activ
 
 function init(){
   applyTheme();
-  if(!window.supabase){showAuth();authErr('Не удалось загрузить Supabase. Проверь интернет и обнови страницу.');return;}
+  if(typeof SB_URL==='undefined'||typeof SB_KEY==='undefined'){showAuth();authErr('Файл config.js не найден или пуст. Создай его в репозитории.');return;}
+  if(!window.supabase){showAuth();authErr('Не удалось загрузить Supabase. Проверь интернет.');return;}
   sb=supabase.createClient(SB_URL,SB_KEY);
   sb.auth.onAuthStateChange((ev,ses)=>{
     if(ses&&ses.user){if(!user||user.id!==ses.user.id){user=ses.user;enterApp();}}
