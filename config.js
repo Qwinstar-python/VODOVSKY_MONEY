@@ -17,10 +17,10 @@ window.VODOVSKY_CONFIG = {
 
   supabase: {
     // Supabase Dashboard → Project Settings → API → Project URL
-    url: '',
+    url: 'https://gxeoamheotruzpletctu.supabase.co',
 
     // Supabase Dashboard → Project Settings → API → anon public key
-    anonKey: ''
+    anonKey: 'sb_publishable_CL-rbV-FHbyhOyakCVDreA_lYXL6RIA'
   },
 
   storage: {
