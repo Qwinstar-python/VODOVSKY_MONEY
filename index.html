@@ -3,103 +3,320 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#1C1C1E">
-<title>Финансы</title>
+<meta name="theme-color" content="#0a0a0a">
+<title>VODOVSKY Finance</title>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{--bg:#1C1C1E;--card:#2C2C2E;--yellow:#FFDD2D;--text:#FFF;--muted:#8E8E93;--green:#30D158;--red:#FF453A;--line:#3A3A3C;--shadow:rgba(0,0,0,.3)}
-[data-theme=light]{--bg:#F2F2F7;--card:#FFF;--yellow:#FFCC00;--text:#000;--muted:#7C7C82;--green:#248A3D;--red:#D70015;--line:#D9D9DE;--shadow:rgba(0,0,0,.08)}
+/* --- MODERN DESIGN SYSTEM --- */
+:root{
+  --bg:#0a0a0a;
+  --card:rgba(28,28,30,0.65);
+  --yellow:#FFDD2D;
+  --text:#FFFFFF;
+  --muted:rgba(255,255,255,0.5);
+  --green:#30D158;
+  --red:#FF453A;
+  --line:rgba(255,255,255,0.08);
+  --glass:blur(24px) saturate(180%);
+  --shadow:0 8px 32px rgba(0,0,0,0.4);
+  --radius:20px;
+  --brand-font:-apple-system,BlinkMacSystemFont,"SF Pro Display",Roboto,Arial,sans-serif;
+}
+[data-theme=light]{
+  --bg:#F2F2F7;
+  --card:rgba(255,255,255,0.75);
+  --yellow:#FFCC00;
+  --text:#000000;
+  --muted:rgba(0,0,0,0.45);
+  --green:#248A3D;
+  --red:#D70015;
+  --line:rgba(0,0,0,0.06);
+  --shadow:0 8px 32px rgba(0,0,0,0.08);
+}
+
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Roboto,Arial,sans-serif;min-height:100vh;padding-bottom:80px;font-size:15px;transition:background .3s,color .3s}
-.wrap{max-width:640px;margin:0 auto;padding:16px}
-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-h1{font-size:24px;font-weight:700;letter-spacing:-.5px}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--brand-font);
+  min-height:100vh;
+  padding-bottom:90px;
+  font-size:15px;
+  transition:background .4s ease,color .4s ease;
+  overflow-x:hidden;
+  position:relative;
+}
+
+/* --- VODOVSKY GROUP BACKGROUND --- */
+body::before{
+  content:"VODOVSKY GROUP";
+  position:fixed;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%) rotate(-15deg);
+  font-size:clamp(40px,12vw,120px);
+  font-weight:900;
+  letter-spacing:-0.03em;
+  white-space:nowrap;
+  pointer-events:none;
+  z-index:0;
+  opacity:0.03;
+  color:var(--text);
+  text-transform:uppercase;
+  user-select:none;
+}
+[data-theme=light] body::before{opacity:0.04;}
+
+.wrap{max-width:640px;margin:0 auto;padding:16px;position:relative;z-index:1;}
+
+/* --- HEADER & BALANCE --- */
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+h1{font-size:26px;font-weight:800;letter-spacing:-0.5px;background:linear-gradient(135deg,var(--text),var(--muted));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
 .tools{display:flex;gap:8px}
-.tools button{background:var(--card);border:none;color:var(--muted);width:36px;height:36px;border-radius:10px;font-size:16px;box-shadow:0 2px 8px var(--shadow)}
-#userLine{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:14px}
+.tools button{
+  background:var(--card);
+  backdrop-filter:var(--glass);
+  border:1px solid var(--line);
+  color:var(--muted);
+  width:40px;height:40px;
+  border-radius:14px;
+  font-size:16px;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .2s ease;
+}
+.tools button:active{transform:scale(0.92);}
+
+#userLine{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:16px}
 #userLine a{color:var(--yellow);text-decoration:none;font-weight:600}
-.balance-card{background:var(--yellow);color:#000;border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 4px 14px rgba(255,221,45,.25)}
-.balance-label{font-size:13px;font-weight:600;opacity:.7;text-transform:uppercase;letter-spacing:.5px}
-.balance-sum{font-size:34px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums;line-height:1.1}
-.tab-content{display:none}.tab-content.active{display:block}
-.form-card,.goals-card,.schedule-card,.passive-card,.chart-card{background:var(--card);border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px var(--shadow)}
-.toggle{display:flex;background:var(--bg);border-radius:12px;padding:3px;margin-bottom:14px}
-.toggle button{flex:1;border:none;background:transparent;color:var(--muted);padding:10px;border-radius:10px;font-size:14px;font-weight:600}
-.toggle button.on-out{background:rgba(255,69,58,.2);color:var(--red)}
-.toggle button.on-in{background:rgba(48,209,88,.2);color:var(--green)}
+
+.balance-card{
+  background:var(--yellow);
+  color:#000;
+  border-radius:var(--radius);
+  padding:24px;
+  margin-bottom:20px;
+  box-shadow:0 12px 40px rgba(255,221,45,0.25);
+  animation:pulseBalance 4s ease-in-out infinite;
+  position:relative;
+  overflow:hidden;
+}
+.balance-card::after{
+  content:"";position:absolute;top:-50%;right:-50%;width:100%;height:100%;
+  background:radial-gradient(circle,rgba(255,255,255,0.3) 0%,transparent 70%);
+  pointer-events:none;
+}
+.balance-label{font-size:13px;font-weight:700;opacity:0.6;text-transform:uppercase;letter-spacing:1px}
+.balance-sum{font-size:38px;font-weight:900;margin-top:6px;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-1px;}
+
+@keyframes pulseBalance{
+  0%,100%{box-shadow:0 12px 40px rgba(255,221,45,0.25)}
+  50%{box-shadow:0 12px 50px rgba(255,221,45,0.35)}
+}
+
+/* --- CARDS & FORMS --- */
+.tab-content{display:none;animation:fadeIn .3s ease;}
+.tab-content.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.form-card,.goals-card,.schedule-card,.passive-card,.chart-card,.ad-card{
+  background:var(--card);
+  backdrop-filter:var(--glass);
+  -webkit-backdrop-filter:var(--glass);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:18px;
+  margin-bottom:16px;
+  box-shadow:var(--shadow);
+  transition:transform .2s ease,box-shadow .2s ease;
+}
+
+.toggle{display:flex;background:rgba(128,128,128,0.1);border-radius:14px;padding:4px;margin-bottom:16px}
+.toggle button{flex:1;border:none;background:transparent;color:var(--muted);padding:10px;border-radius:11px;font-size:14px;font-weight:700;transition:all .25s ease}
+.toggle button.on-out{background:rgba(255,69,58,0.2);color:var(--red)}
+.toggle button.on-in{background:rgba(48,209,88,0.2);color:var(--green)}
+
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
-input,select{background:var(--bg);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:14px;font-size:16px;width:100%;outline:none}
-input:focus,select:focus{border-color:var(--yellow)}
-.add-btn{background:var(--yellow);color:#000;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:700;width:100%;margin-top:4px}
-.section-title{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin:0 0 10px;font-weight:600}
-.list{background:var(--card);border-radius:16px;overflow:hidden;box-shadow:0 2px 8px var(--shadow)}
-.item{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line)}
+input,select{
+  background:rgba(128,128,128,0.08);
+  border:1px solid var(--line);
+  border-radius:14px;
+  color:var(--text);
+  padding:14px 16px;
+  font-size:16px;
+  width:100%;
+  outline:none;
+  transition:border-color .2s,background .2s;
+}
+input:focus,select:focus{border-color:var(--yellow);background:rgba(255,221,45,0.05);}
+
+.add-btn{
+  background:var(--yellow);color:#000;border:none;
+  border-radius:14px;padding:16px;font-size:16px;font-weight:800;
+  width:100%;margin-top:6px;
+  transition:transform .15s ease,box-shadow .15s ease;
+  letter-spacing:-0.2px;
+}
+.add-btn:active{transform:scale(0.97);}
+
+.section-title{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;margin:0 0 12px;font-weight:700}
+
+/* --- LIST ITEMS --- */
+.list{background:var(--card);backdrop-filter:var(--glass);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.item{display:flex;align-items:center;gap:14px;padding:16px;border-bottom:1px solid var(--line);transition:background .15s;}
 .item:last-child{border-bottom:none}
-.ico{width:40px;height:40px;background:var(--bg);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
-.info{flex:1;min-width:0}.info-name{font-weight:600}.info-date{font-size:12px;color:var(--muted);margin-top:2px}
-.amt{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.item:active{background:rgba(128,128,128,0.05);}
+.ico{width:44px;height:44px;background:rgba(128,128,128,0.1);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.info{flex:1;min-width:0}.info-name{font-weight:700;font-size:15px}.info-date{font-size:12px;color:var(--muted);margin-top:3px}
+.amt{font-weight:800;font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap;letter-spacing:-0.3px}
 .green{color:var(--green)}.red{color:var(--red)}
-.del{border:none;background:transparent;color:var(--muted);font-size:20px;padding:4px 0 4px 8px}
-.empty{color:var(--muted);text-align:center;padding:26px 16px;font-size:14px}
-.month-picker{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;color:var(--text);font-size:15px;width:100%;margin-bottom:12px;text-align:center}
+.del{border:none;background:transparent;color:var(--muted);font-size:22px;padding:4px 0 4px 8px;transition:color .15s}
+.del:active{color:var(--red)}
+.empty{color:var(--muted);text-align:center;padding:32px 16px;font-size:14px}
+
+/* --- ANALYTICS --- */
+.month-picker{background:var(--card);backdrop-filter:var(--glass);border:1px solid var(--line);border-radius:14px;padding:14px 16px;color:var(--text);font-size:15px;width:100%;margin-bottom:16px;text-align:center}
 .cards2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
-.mini-stat{background:var(--card);border-radius:14px;padding:12px 14px;box-shadow:0 2px 8px var(--shadow)}
-.mini-stat span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
-.mini-stat b{display:block;font-size:17px;margin-top:3px;font-variant-numeric:tabular-nums}
-.passive-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
-.passive-sum{font-size:22px;font-weight:700;color:var(--green)}
-.passive-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.mini-stat{background:var(--card);backdrop-filter:var(--glass);border:1px solid var(--line);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow)}
+.mini-stat span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.mini-stat b{display:block;font-size:18px;margin-top:4px;font-variant-numeric:tabular-nums;letter-spacing:-0.3px}
+.passive-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.passive-sum{font-size:24px;font-weight:800;color:var(--green);letter-spacing:-0.5px}
+.passive-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
 .passive-row:last-child{border-bottom:none}
-.chart-title{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;font-weight:600}
+.chart-title{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;font-weight:700}
 svg{width:100%;height:auto;display:block}
-.chart-label{fill:var(--muted);font-size:9px}.chart-val{fill:var(--text);font-size:10px;font-weight:600}
-.no-data-chart{color:var(--muted);text-align:center;padding:36px 0;font-size:14px}
-.goal-item{margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.chart-label{fill:var(--muted);font-size:9px;font-weight:600}.chart-val{fill:var(--text);font-size:10px;font-weight:800}
+.no-data-chart{color:var(--muted);text-align:center;padding:40px 0;font-size:14px}
+
+/* --- GOALS --- */
+.goal-item{margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--line)}
 .goal-item:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
-.goal-img{width:100%;height:130px;object-fit:cover;border-radius:12px;margin-bottom:10px;background:var(--bg)}
-.goal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.goal-name{font-weight:600}.goal-del{border:none;background:transparent;color:var(--red);font-size:18px;padding:0 4px}
-.goal-progress{height:8px;background:var(--bg);border-radius:99px;overflow:hidden;margin-bottom:6px}
-.goal-bar{height:100%;background:var(--green);border-radius:99px;transition:width .3s}
-.goal-stats{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
-.goal-add-form{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.goal-img{width:100%;height:140px;object-fit:cover;border-radius:14px;margin-bottom:12px;background:rgba(128,128,128,0.1)}
+.goal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.goal-name{font-weight:700;font-size:16px}.goal-del{border:none;background:transparent;color:var(--red);font-size:20px;padding:0 4px}
+.goal-progress{height:10px;background:rgba(128,128,128,0.1);border-radius:99px;overflow:hidden;margin-bottom:8px}
+.goal-bar{height:100%;background:var(--green);border-radius:99px;transition:width .4s ease}
+.goal-stats{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);font-weight:600}
+.goal-add-form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .goal-add-form .full{grid-column:1/-1}
 .file-input-wrap{position:relative;overflow:hidden;width:100%}
 .file-input-wrap input[type=file]{position:absolute;left:0;top:0;opacity:0;width:100%;height:100%}
-.file-input-wrap .btn{background:var(--bg);border:1px dashed var(--line);border-radius:10px;padding:12px;text-align:center;color:var(--muted);font-size:13px}
-.schedule-form-row{display:grid;grid-template-columns:1fr 64px 90px 40px;gap:8px}
-.schedule-form-row input,.schedule-form-row select{padding:10px;font-size:14px}
-.schedule-form-row button{background:var(--yellow);color:#000;border:none;border-radius:10px;font-weight:700;font-size:18px}
-.sched-total{display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;margin-bottom:6px;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted)}
-.sched-total b{font-size:18px}
-.schedule-item{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.file-input-wrap .btn{background:rgba(128,128,128,0.08);border:1px dashed var(--line);border-radius:14px;padding:14px;text-align:center;color:var(--muted);font-size:13px;font-weight:600;transition:all .2s}
+.file-input-wrap .btn:hover{border-color:var(--yellow);color:var(--yellow)}
+
+/* --- SCHEDULE --- */
+.schedule-form-row{display:grid;grid-template-columns:1fr 64px 90px 44px;gap:8px}
+.schedule-form-row input,.schedule-form-row select{padding:12px;font-size:14px}
+.schedule-form-row button{background:var(--yellow);color:#000;border:none;border-radius:12px;font-weight:800;font-size:20px;transition:transform .15s}
+.schedule-form-row button:active{transform:scale(0.92)}
+.sched-total{display:flex;justify-content:space-between;align-items:center;padding-bottom:14px;margin-bottom:8px;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted);font-weight:600}
+.sched-total b{font-size:20px;color:var(--green);letter-spacing:-0.3px}
+.schedule-item{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid var(--line)}
 .schedule-item:last-child{border-bottom:none}
-.schedule-day{font-weight:700;color:var(--yellow)}
-.schedule-cat{font-size:13px;color:var(--muted);display:block;margin-top:2px}
-.schedule-amt{font-weight:700;color:var(--green);font-variant-numeric:tabular-nums;white-space:nowrap}
-.nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -2px 10px var(--shadow)}
-.nav button{flex:1;border:none;background:transparent;color:var(--muted);padding:10px 0 8px;font-size:10px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:4px}
+.schedule-day{font-weight:800;color:var(--yellow);font-size:16px}
+.schedule-cat{font-size:13px;color:var(--muted);display:block;margin-top:3px}
+.schedule-amt{font-weight:800;color:var(--green);font-variant-numeric:tabular-nums;white-space:nowrap;font-size:16px}
+
+/* --- AD BANNER --- */
+.ad-card{
+  background:linear-gradient(135deg,rgba(255,221,45,0.12),rgba(255,221,45,0.03));
+  border:1px solid rgba(255,221,45,0.2);
+  display:flex;flex-direction:column;gap:10px;
+  position:relative;overflow:hidden;
+}
+.ad-card::before{
+  content:"";position:absolute;top:-30%;right:-20%;width:120px;height:120px;
+  background:radial-gradient(circle,rgba(255,221,45,0.15),transparent 70%);
+  pointer-events:none;
+}
+.ad-badge{
+  display:inline-flex;align-self:flex-start;
+  font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;
+  color:var(--yellow);background:rgba(255,221,45,0.1);
+  padding:4px 10px;border-radius:8px;
+}
+.ad-title{font-size:17px;font-weight:800;line-height:1.3;letter-spacing:-0.3px}
+.ad-desc{font-size:13px;color:var(--muted);line-height:1.5}
+.ad-btn{
+  display:inline-flex;align-self:flex-start;
+  background:var(--yellow);color:#000;
+  border:none;border-radius:12px;
+  padding:12px 24px;font-size:14px;font-weight:800;
+  text-decoration:none;margin-top:4px;
+  transition:transform .15s,box-shadow .15s;
+}
+.ad-btn:active{transform:scale(0.96);}
+
+/* --- BOTTOM NAV --- */
+.nav{
+  position:fixed;bottom:0;left:0;right:0;
+  background:rgba(28,28,30,0.85);
+  backdrop-filter:blur(30px) saturate(180%);
+  -webkit-backdrop-filter:blur(30px) saturate(180%);
+  border-top:1px solid var(--line);
+  display:flex;z-index:100;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+[data-theme=light] .nav{background:rgba(255,255,255,0.85);}
+.nav button{
+  flex:1;border:none;background:transparent;
+  color:var(--muted);padding:12px 0 10px;
+  font-size:10px;font-weight:700;
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  transition:color .2s;
+}
 .nav button.active{color:var(--yellow)}
-.nav button svg{width:24px;height:24px;fill:currentColor}
+.nav button svg{width:24px;height:24px;fill:currentColor;transition:transform .2s}
+.nav button.active svg{transform:scale(1.1);}
+
+/* --- AUTH SCREEN --- */
 .auth-screen{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
-.auth-card{background:var(--card);border-radius:20px;padding:26px;width:100%;max-width:400px;box-shadow:0 8px 32px var(--shadow)}
-.auth-logo{width:64px;height:64px;background:var(--yellow);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 14px}
-.auth-title{font-size:24px;font-weight:800;text-align:center;margin-bottom:6px}
-.auth-subtitle{font-size:14px;color:var(--muted);text-align:center;margin-bottom:18px}
-.auth-input{margin-bottom:12px}
-.auth-btn{background:var(--yellow);color:#000;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:700;width:100%;margin-bottom:10px}
+.auth-card{
+  background:var(--card);backdrop-filter:var(--glass);
+  border:1px solid var(--line);
+  border-radius:24px;padding:32px 26px;
+  width:100%;max-width:400px;
+  box-shadow:0 20px 60px rgba(0,0,0,0.4);
+  animation:fadeIn .4s ease;
+}
+.auth-logo{
+  width:72px;height:72px;background:var(--yellow);
+  border-radius:22px;display:flex;align-items:center;justify-content:center;
+  font-size:36px;margin:0 auto 18px;
+  box-shadow:0 8px 24px rgba(255,221,45,0.3);
+}
+.auth-title{font-size:28px;font-weight:900;text-align:center;margin-bottom:6px;letter-spacing:-0.5px}
+.auth-subtitle{font-size:14px;color:var(--muted);text-align:center;margin-bottom:24px}
+.auth-input{margin-bottom:14px}
+.auth-btn{
+  background:var(--yellow);color:#000;border:none;
+  border-radius:14px;padding:16px;font-size:16px;font-weight:800;
+  width:100%;margin-bottom:10px;transition:transform .15s;
+}
+.auth-btn:active{transform:scale(0.97);}
 .auth-btn.secondary{background:transparent;color:var(--yellow);border:1px solid var(--yellow)}
-.auth-error{color:var(--red);font-size:13px;text-align:center;margin-bottom:10px;min-height:16px}
-.auth-ok{color:var(--green);font-size:13px;text-align:center;margin-bottom:10px}
-.auth-note{font-size:12px;color:var(--muted);text-align:center;line-height:1.5;margin-top:8px}
-#toast{position:fixed;bottom:calc(84px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px 16px;font-size:14px;box-shadow:0 6px 24px var(--shadow);opacity:0;pointer-events:none;transition:.25s;z-index:300;max-width:90%;white-space:nowrap}
+.auth-error{color:var(--red);font-size:13px;text-align:center;margin-bottom:10px;min-height:16px;font-weight:600}
+.auth-ok{color:var(--green);font-size:13px;text-align:center;margin-bottom:10px;font-weight:600}
+.auth-note{font-size:12px;color:var(--muted);text-align:center;line-height:1.6;margin-top:12px}
+
+/* --- TOAST & LOADING --- */
+#toast{
+  position:fixed;bottom:calc(90px + env(safe-area-inset-bottom));left:50%;
+  transform:translateX(-50%) translateY(20px);
+  background:rgba(28,28,30,0.9);backdrop-filter:blur(20px);
+  color:var(--text);border:1px solid var(--line);
+  border-radius:16px;padding:14px 20px;font-size:14px;font-weight:600;
+  box-shadow:0 12px 40px rgba(0,0,0,0.4);
+  opacity:0;pointer-events:none;transition:.3s ease;z-index:300;max-width:90%;white-space:nowrap;
+}
+[data-theme=light] #toast{background:rgba(255,255,255,0.9);}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
 #toast.err{border-color:var(--red)}
-#toast button{background:var(--yellow);color:#000;border:none;border-radius:8px;padding:5px 12px;font-weight:700;margin-left:10px}
-.loading{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;display:none;align-items:center;justify-content:center}
+#toast button{background:var(--yellow);color:#000;border:none;border-radius:10px;padding:6px 14px;font-weight:800;margin-left:12px;font-size:13px}
+
+.loading{position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);z-index:2000;display:none;align-items:center;justify-content:center}
 .loading.show{display:flex}
-.spinner{width:42px;height:42px;border:3px solid var(--line);border-top-color:var(--yellow);border-radius:50%;animation:spin 1s linear infinite}
+.spinner{width:48px;height:48px;border:3px solid var(--line);border-top-color:var(--yellow);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
@@ -107,21 +324,23 @@ svg{width:100%;height:auto;display:block}
 <div class="loading" id="loading"><div class="spinner"></div></div>
 <div id="toast"></div>
 
+<!-- AUTH -->
 <div class="auth-screen" id="authScreen">
   <div class="auth-card">
     <div class="auth-logo">💰</div>
     <div class="auth-title">Финансы</div>
-    <div class="auth-subtitle">Вход и регистрация</div>
+    <div class="auth-subtitle">VODOVSKY GROUP</div>
     <div class="auth-error" id="authError"></div>
     <div class="auth-ok" id="authInfo"></div>
     <input class="auth-input" type="email" id="authEmail" placeholder="Email" autocomplete="email">
-    <input class="auth-input" type="password" id="authPassword" placeholder="Пароль (минимум 6 символов)" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAuth('in')">
+    <input class="auth-input" type="password" id="authPassword" placeholder="Пароль (мин. 6 символов)" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAuth('in')">
     <button class="auth-btn" onclick="doAuth('in')">Войти</button>
     <button class="auth-btn secondary" onclick="doAuth('up')">Создать аккаунт</button>
-    <div class="auth-note">Данные хранятся в облаке и синхронизируются между всеми устройствами.</div>
+    <div class="auth-note">Данные хранятся в защищённом облаке<br>и синхронизируются между устройствами.</div>
   </div>
 </div>
 
+<!-- APP -->
 <div class="wrap" id="app" style="display:none">
   <header>
     <h1>💰 Финансы</h1>
@@ -134,8 +353,18 @@ svg{width:100%;height:auto;display:block}
   </header>
   <div id="userLine"><span id="userEmail"></span><span><span id="syncState">☁️</span> · <a href="#" onclick="logout();return false">Выйти</a></span></div>
 
+  <!-- TAB: OPS -->
   <div id="tab-ops" class="tab-content active">
     <div class="balance-card"><div class="balance-label">Общий баланс</div><div id="balance" class="balance-sum">0 ₽</div></div>
+
+    <!-- AD BANNER -->
+    <div class="ad-card">
+      <span class="ad-badge">Партнёр</span>
+      <div class="ad-title">Бизнес-акселератор от VODOVSKY GROUP</div>
+      <div class="ad-desc">Масштабируй свой бизнес с поддержкой экспертов. Бесплатная диагностика ниши и стратегия роста за 30 минут.</div>
+      <a href="https://vodovsky.group" target="_blank" class="ad-btn">Узнать подробнее →</a>
+    </div>
+
     <div class="form-card">
       <div class="toggle"><button type="button" id="tOut" class="on-out">Расход</button><button type="button" id="tIn">Доход</button></div>
       <div class="row"><input id="amount" inputmode="decimal" placeholder="Сумма, ₽"><input id="date" type="date"></div>
@@ -143,10 +372,11 @@ svg{width:100%;height:auto;display:block}
       <input id="note" placeholder="Заметка (необязательно)" style="margin-top:10px">
       <button class="add-btn" onclick="addTx()">Добавить</button>
     </div>
-    <div class="section-title" style="margin-top:20px">Последние операции</div>
+    <div class="section-title" style="margin-top:24px">Последние операции</div>
     <div class="list" id="list"></div>
   </div>
 
+  <!-- TAB: ANALYTICS -->
   <div id="tab-analytics" class="tab-content">
     <input type="month" id="month" class="month-picker">
     <div class="cards2">
@@ -160,6 +390,7 @@ svg{width:100%;height:auto;display:block}
     <div class="chart-card"><div class="chart-title">Рост капитала по месяцам</div><div id="chart-container"></div></div>
   </div>
 
+  <!-- TAB: GOALS -->
   <div id="tab-goals" class="tab-content">
     <div class="goals-card"><div class="section-title">Цели накоплений</div><div id="goals-list"></div></div>
     <div class="goals-card">
@@ -178,6 +409,7 @@ svg{width:100%;height:auto;display:block}
     </div>
   </div>
 
+  <!-- TAB: SCHEDULE -->
   <div id="tab-schedule" class="tab-content">
     <div class="schedule-card">
       <div class="section-title">Добавить выплату</div>
@@ -192,6 +424,7 @@ svg{width:100%;height:auto;display:block}
   </div>
 </div>
 
+<!-- NAV -->
 <nav class="nav" id="nav" style="display:none">
   <button class="active" onclick="switchTab('ops',this)"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>Операции</button>
   <button onclick="switchTab('analytics',this)"><svg viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>Аналитика</button>
@@ -232,7 +465,7 @@ async function doAuth(mode){
   const r=mode==='up'?await sb.auth.signUp({email,password}):await sb.auth.signInWithPassword({email,password});
   setLoading(false);
   if(r.error){const m=r.error.message;authErr(m.includes('Invalid login')?'Неверный email или пароль':m.includes('already registered')?'Такой email уже зарегистрирован — нажми «Войти»':m);}
-  else if(mode==='up'&&!r.data.session){$('authInfo').textContent='Аккаунт создан! Подтверди email по письму, затем нажми «Войти». (Или выключи Confirm email в Supabase.)';}
+  else if(mode==='up'&&!r.data.session){$('authInfo').textContent='Аккаунт создан! Подтверди email по письму, затем нажми «Войти».';}
 }
 async function logout(){await sb.auth.signOut();}
 
@@ -256,7 +489,7 @@ async function migrate(){
   try{old=JSON.parse(localStorage.getItem('fin_v4')||localStorage.getItem('fin_v3')||localStorage.getItem('fin_v2')||localStorage.getItem('fin_v1')||'[]');og=JSON.parse(localStorage.getItem('fin_goals_v2')||localStorage.getItem('fin_goals')||'[]');os=JSON.parse(localStorage.getItem('fin_schedule_v2')||localStorage.getItem('fin_schedule')||'[]');}catch(e){}
   if(!old.length&&!og.length&&!os.length)return;
   migAsked=true;
-  if(!confirm('Нашёл старые данные на этом телефоне: '+old.length+' операций, '+og.length+' целей, '+os.length+' выплат. Перенести в облако?'))return;
+  if(!confirm('Нашёл старые данные на этом телефоне. Перенести в облако?'))return;
   setLoading(true);
   const ops=[];
   if(old.length)ops.push(sb.from('transactions').insert(old.map(x=>({id:x.id||nid(),type:x.type,cat:x.cat,amount:x.amount,date:x.date,note:x.note||''}))));
@@ -267,7 +500,7 @@ async function migrate(){
   await loadAll();
 }
 
-async function dbIns(t,row){const{error}=await sb.from(t).insert(row);if(error){setSync(false);toast('Не сохранено в облако: '+error.message,'err');loadAll();}else setSync(true);}
+async function dbIns(t,row){const{error}=await sb.from(t).insert(row);if(error){setSync(false);toast('Не сохранено: '+error.message,'err');loadAll();}else setSync(true);}
 async function dbUpd(t,id,p){const{error}=await sb.from(t).update(p).eq('id',id);if(error){setSync(false);toast('Не сохранено: '+error.message,'err');loadAll();}else setSync(true);}
 async function dbDel(t,id){const{error}=await sb.from(t).delete().eq('id',id);if(error){setSync(false);toast('Не удалено: '+error.message,'err');loadAll();}else setSync(true);}
 
@@ -282,13 +515,13 @@ function addTx(){
 function delTx(id){
   const row=data.find(x=>x.id===id);if(!row)return;
   data=data.filter(x=>x.id!==id);renderOps();dbDel('transactions',id);
-  toast('Операция удалена','',{label:'Вернуть',fn:()=>{data.push(row);renderOps();dbIns('transactions',row);}});
+  toast('Удалено','',{label:'Вернуть',fn:()=>{data.push(row);renderOps();dbIns('transactions',row);}});
 }
 function renderOps(){
   const bal=data.reduce((s,x)=>s+(x.type==='in'?+x.amount:-+x.amount),0);
   $('balance').textContent=fmt(bal);
   const sorted=[...data].sort((a,b)=>String(b.date).localeCompare(String(a.date))||b.id-a.id).slice(0,50);
-  $('list').innerHTML=sorted.length?sorted.map(x=>'<div class="item"><div class="ico">'+(CATS[x.type]&&CATS[x.type][x.cat]||'•')+'</div><div class="info"><div class="info-name">'+esc(x.cat)+'</div><div class="info-date">'+String(x.date).split('-').reverse().slice(0,2).join('.')+(x.note?' · '+esc(x.note):'')+'</div></div><div class="amt '+(x.type==='in'?'green':'red')+'">'+(x.type==='in'?'+':'−')+fmt(x.amount)+'</div><button class="del" onclick="delTx('+x.id+')">×</button></div>').join(''):'<div class="empty">Пока пусто. Добавь первую операцию — например, зарплату 💼</div>';
+  $('list').innerHTML=sorted.length?sorted.map(x=>'<div class="item"><div class="ico">'+(CATS[x.type]&&CATS[x.type][x.cat]||'•')+'</div><div class="info"><div class="info-name">'+esc(x.cat)+'</div><div class="info-date">'+String(x.date).split('-').reverse().slice(0,2).join('.')+(x.note?' · '+esc(x.note):'')+'</div></div><div class="amt '+(x.type==='in'?'green':'red')+'">'+(x.type==='in'?'+':'−')+fmt(x.amount)+'</div><button class="del" onclick="delTx('+x.id+')">×</button></div>').join(''):'<div class="empty">Пока пусто. Добавь первую операцию 💼</div>';
 }
 
 function renderAnalytics(){
@@ -305,7 +538,7 @@ function renderAnalytics(){
 function short(n){const a=Math.abs(n);return a>=1000?(n/1000).toFixed(a>=100000?0:1)+'k':String(Math.round(n));}
 function renderChart(){
   const el=$('chart-container');
-  if(!data.length){el.innerHTML='<div class="no-data-chart">Добавь операции — и здесь появится график роста капитала 📈</div>';return;}
+  if(!data.length){el.innerHTML='<div class="no-data-chart">Добавь операции — появится график 📈</div>';return;}
   const mm={};data.forEach(x=>{const m=String(x.date||'').slice(0,7);mm[m]=(mm[m]||0)+(x.type==='in'?+x.amount:-+x.amount);});
   let c=0;const all=Object.keys(mm).sort().map(m=>({m,v:c+=mm[m]}));
   const pts=all.slice(-12);
@@ -325,7 +558,7 @@ function pickImg(inp){
 }
 function addGoal(){
   const name=$('goalName').value.trim(),target=num($('goalTarget').value);
-  if(!name||!target||target<=0)return toast('Укажи название и сумму цели','err');
+  if(!name||!target||target<=0)return toast('Укажи название и сумму','err');
   const row={id:nid(),name,target,current:0,img:tempImg};
   goals.push(row);renderGoals();dbIns('goals',row);
   $('goalName').value='';$('goalTarget').value='';$('goalImg').value='';tempImg=null;
@@ -337,21 +570,21 @@ function addToGoal(){
   const g=goals.find(x=>x.id===id);
   if(!g||!amount||amount<=0)return toast('Выбери цель и сумму','err');
   g.current=+g.current+amount;renderGoals();dbUpd('goals',id,{current:g.current});
-  $('goalAmount').value='';toast('Цель пополнена 💪');
+  $('goalAmount').value='';toast('Пополнено 💪');
 }
 function delGoal(id){
   const row=goals.find(x=>x.id===id);if(!row)return;
   goals=goals.filter(x=>x.id!==id);renderGoals();dbDel('goals',id);
-  toast('Цель удалена','',{label:'Вернуть',fn:()=>{goals.push(row);renderGoals();dbIns('goals',row);}});
+  toast('Удалено','',{label:'Вернуть',fn:()=>{goals.push(row);renderGoals();dbIns('goals',row);}});
 }
 function renderGoals(){
   $('goalSelect').innerHTML=goals.length?goals.map(g=>'<option value="'+g.id+'">'+esc(g.name)+'</option>').join(''):'<option value="">Сначала создай цель</option>';
-  $('goals-list').innerHTML=goals.length?goals.map(g=>{const pct=Math.min(100,Math.round(+g.current/+g.target*100));const img=g.img&&String(g.img).startsWith('data:image/')?'<img src="'+g.img+'" class="goal-img" alt="">':'';return '<div class="goal-item">'+img+'<div class="goal-header"><span class="goal-name">'+esc(g.name)+'</span><button class="goal-del" onclick="delGoal('+g.id+')">×</button></div><div class="goal-progress"><div class="goal-bar" style="width:'+pct+'%"></div></div><div class="goal-stats"><span>'+fmt(g.current)+' / '+fmt(g.target)+'</span><span>'+pct+'%</span></div></div>';}).join(''):'<div class="empty">Пока нет целей. Создай первую — например, «Подушка безопасности» 🎯</div>';
+  $('goals-list').innerHTML=goals.length?goals.map(g=>{const pct=Math.min(100,Math.round(+g.current/+g.target*100));const img=g.img&&String(g.img).startsWith('data:image/')?'<img src="'+g.img+'" class="goal-img" alt="">':'';return '<div class="goal-item">'+img+'<div class="goal-header"><span class="goal-name">'+esc(g.name)+'</span><button class="goal-del" onclick="delGoal('+g.id+')">×</button></div><div class="goal-progress"><div class="goal-bar" style="width:'+pct+'%"></div></div><div class="goal-stats"><span>'+fmt(g.current)+' / '+fmt(g.target)+'</span><span>'+pct+'%</span></div></div>';}).join(''):'<div class="empty">Пока нет целей 🎯</div>';
 }
 
 function addSchedule(){
   const cat=$('schedCat').value,day=parseInt($('schedDay').value),amount=num($('schedAmount').value);
-  if(!day||day<1||day>31||!amount||amount<=0)return toast('Укажи день (1–31) и сумму','err');
+  if(!day||day<1||day>31||!amount||amount<=0)return toast('Укажи день и сумму','err');
   const row={id:nid(),cat,day,amount};
   schedule.push(row);renderSchedule();dbIns('schedule',row);
   $('schedDay').value='';$('schedAmount').value='';toast('Выплата добавлена 📅');
@@ -359,18 +592,18 @@ function addSchedule(){
 function delSchedule(id){
   const row=schedule.find(x=>x.id===id);if(!row)return;
   schedule=schedule.filter(x=>x.id!==id);renderSchedule();dbDel('schedule',id);
-  toast('Выплата удалена','',{label:'Вернуть',fn:()=>{schedule.push(row);renderSchedule();dbIns('schedule',row);}});
+  toast('Удалено','',{label:'Вернуть',fn:()=>{schedule.push(row);renderSchedule();dbIns('schedule',row);}});
 }
 function renderSchedule(){
   $('schedCat').innerHTML=Object.keys(CATS.in).map(c=>'<option>'+esc(c)+'</option>').join('');
   const s=[...schedule].sort((a,b)=>a.day-b.day);
   const total=s.reduce((t,x)=>t+ +x.amount,0);
-  $('schedule-list').innerHTML=s.length?'<div class="sched-total"><span>Всего за месяц</span><b class="green">+'+fmt(total)+'</b></div>'+s.map(x=>'<div class="schedule-item"><div><span class="schedule-day">'+x.day+'-е число</span><span class="schedule-cat">'+(CATS.in[x.cat]||'•')+' '+esc(x.cat)+'</span></div><div style="display:flex;align-items:center;gap:10px"><span class="schedule-amt">+'+fmt(x.amount)+'</span><button class="del" onclick="delSchedule('+x.id+')">×</button></div></div>').join(''):'<div class="empty">Добавь выплаты: например, «Купоны · 15-е число · 2 400 ₽»</div>';
+  $('schedule-list').innerHTML=s.length?'<div class="sched-total"><span>Всего за месяц</span><b>+'+fmt(total)+'</b></div>'+s.map(x=>'<div class="schedule-item"><div><span class="schedule-day">'+x.day+'-е число</span><span class="schedule-cat">'+(CATS.in[x.cat]||'•')+' '+esc(x.cat)+'</span></div><div style="display:flex;align-items:center;gap:10px"><span class="schedule-amt">+'+fmt(x.amount)+'</span><button class="del" onclick="delSchedule('+x.id+')">×</button></div></div>').join(''):'<div class="empty">Добавь выплаты 📅</div>';
 }
 
 function exportData(){
   const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([JSON.stringify({data,goals,schedule,exported:today(),version:5},null,2)],{type:'application/json'}));
+  a.href=URL.createObjectURL(new Blob([JSON.stringify({data,goals,schedule,exported:today(),version:6},null,2)],{type:'application/json'}));
   a.download='finance-backup-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
 }
 function importData(inp){
@@ -381,7 +614,7 @@ function importData(inp){
       const b=JSON.parse(r.result);
       const nd=Array.isArray(b)?b:(b.data||[]),ng=b.goals||[],ns=b.schedule||[];
       if(!Array.isArray(nd))throw 0;
-      if(!confirm('Заменить ВСЕ облачные данные на файл? ('+nd.length+' операций, '+ng.length+' целей, '+ns.length+' выплат)'))return;
+      if(!confirm('Заменить ВСЕ данные на файл?'))return;
       setLoading(true);
       await Promise.all([sb.from('transactions').delete().neq('id',0),sb.from('goals').delete().neq('id',0),sb.from('schedule').delete().neq('id',0)]);
       const ops=[];
@@ -389,7 +622,7 @@ function importData(inp){
       if(ng.length)ops.push(sb.from('goals').insert(ng.map(x=>({id:x.id||nid(),name:x.name,target:x.target,current:x.current||0,img:x.img||null}))));
       if(ns.length)ops.push(sb.from('schedule').insert(ns.map(x=>({id:x.id||nid(),cat:x.cat,day:x.day,amount:x.amount}))));
       const rs=await Promise.all(ops);setLoading(false);
-      if(rs.some(x=>x.error))toast('Часть данных не загрузилась','err');
+      if(rs.some(x=>x.error))toast('Ошибка импорта','err');
       await loadAll();toast('Импорт завершён ☁️');
     }catch(e){toast('Файл не подходит','err');}
   };
@@ -407,7 +640,7 @@ function renderAll(){renderOps();if($('tab-analytics').classList.contains('activ
 
 function init(){
   applyTheme();
-  if(typeof SB_URL==='undefined'||typeof SB_KEY==='undefined'){showAuth();authErr('Файл config.js не найден или пуст. Создай его в репозитории.');return;}
+  if(typeof SB_URL==='undefined'||typeof SB_KEY==='undefined'){showAuth();authErr('config.js не найден. Создай его в репозитории.');return;}
   if(!window.supabase){showAuth();authErr('Не удалось загрузить Supabase. Проверь интернет.');return;}
   sb=supabase.createClient(SB_URL,SB_KEY);
   sb.auth.onAuthStateChange((ev,ses)=>{
