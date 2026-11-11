@@ -110,22 +110,14 @@ svg{width:100%;height:auto;display:block}
   <div class="auth-card">
     <div class="auth-logo">💰</div>
     <div class="auth-title">Финансы</div>
-    <div id="setupBox" style="display:none">
-      <div class="auth-subtitle">Подключение к облаку</div>
-      <div class="auth-note" id="setupHint" style="margin-bottom:14px">Вставь Publishable key из Supabase (кнопка Connect → Publishable key, начинается с sb_publishable_). Ключ публичный — это безопасно.</div>
-      <input class="auth-input" id="keyInput" placeholder="sb_publishable_..." onkeydown="if(event.key==='Enter')saveKey()">
-      <button class="auth-btn" onclick="saveKey()">Подключить облако</button>
-    </div>
-    <div id="authBox" style="display:none">
-      <div class="auth-subtitle">Вход и регистрация</div>
-      <div class="auth-error" id="authError"></div>
-      <div class="auth-ok" id="authInfo"></div>
-      <input class="auth-input" type="email" id="authEmail" placeholder="Email" autocomplete="email">
-      <input class="auth-input" type="password" id="authPassword" placeholder="Пароль (минимум 6 символов)" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAuth('in')">
-      <button class="auth-btn" onclick="doAuth('in')">Войти</button>
-      <button class="auth-btn secondary" onclick="doAuth('up')">Создать аккаунт</button>
-      <div class="auth-note">Данные хранятся в твоём облаке и синхронизируются между всеми устройствами.</div>
-    </div>
+    <div class="auth-subtitle">Вход и регистрация</div>
+    <div class="auth-error" id="authError"></div>
+    <div class="auth-ok" id="authInfo"></div>
+    <input class="auth-input" type="email" id="authEmail" placeholder="Email" autocomplete="email">
+    <input class="auth-input" type="password" id="authPassword" placeholder="Пароль (минимум 6 символов)" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAuth('in')">
+    <button class="auth-btn" onclick="doAuth('in')">Войти</button>
+    <button class="auth-btn secondary" onclick="doAuth('up')">Создать аккаунт</button>
+    <div class="auth-note">Данные хранятся в облаке и синхронизируются между всеми устройствами.</div>
   </div>
 </div>
 
@@ -208,9 +200,10 @@ svg{width:100%;height:auto;display:block}
 
 <script>
 const SB_URL='https://gxeoamheotruzpletctu.supabase.co';
+const SB_KEY='sb_publishable_CL-rbV-FHbyhOyakCVDreA_lYXL6RIA';
 const CATS={in:{'Зарплата':'💼','Купоны облигаций':'🏦','Дивиденды':'📈','Проценты и вклады':'🪙','Продажа бумаг':'📊','Прочий доход':'➕'},out:{'Продукты':'🛒','Жильё и ЖКХ':'🏠','Транспорт':'🚌','Связь':'📱','Кафе':'🍔','Развлечения':'🎬','Здоровье':'💊','Одежда':'👕','Покупка бумаг':'📥','Прочее':'📦'}};
 const PASSIVE=['Купоны облигаций','Дивиденды','Проценты и вклады'];
-let sb=null,user=null,data=[],goals=[],schedule=[],type='out',tempImg=null,migAsked=false;
+let sb,user=null,data=[],goals=[],schedule=[],type='out',tempImg=null,migAsked=false;
 let theme=localStorage.getItem('fin_theme')||'dark';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -219,7 +212,7 @@ const today=()=>new Date().toISOString().slice(0,10);
 const nid=()=>Date.now()*1000+Math.floor(Math.random()*1000);
 const num=v=>parseFloat(String(v).replace(',','.').replace(/\s/g,''));
 
-function applyTheme(){document.documentElement.setAttribute('data-theme',theme);$('themeBtn').textContent=theme==='dark'?'🌙':'️';localStorage.setItem('fin_theme',theme);}
+function applyTheme(){document.documentElement.setAttribute('data-theme',theme);$('themeBtn').textContent=theme==='dark'?'🌙':'☀️';localStorage.setItem('fin_theme',theme);}
 function toggleTheme(){theme=theme==='dark'?'light':'dark';applyTheme();}
 
 let toastTimer=null;
@@ -228,10 +221,8 @@ function toastAction(){const f=window._tf;window._tf=null;$('toast').className='
 let lc=0;function setLoading(on){lc=Math.max(0,lc+(on?1:-1));$('loading').classList.toggle('show',lc>0);}
 function setSync(ok){const e=$('syncState');e.textContent=ok?'☁️ синхронизировано':'⚠️ нет связи';e.style.color=ok?'var(--green)':'var(--red)';}
 
-function showSetup(){$('authScreen').style.display='flex';$('setupBox').style.display='block';$('authBox').style.display='none';}
-function showAuth(){$('authScreen').style.display='flex';$('setupBox').style.display='none';$('authBox').style.display='block';$('app').style.display='none';$('nav').style.display='none';}
+function showAuth(){$('authScreen').style.display='flex';$('app').style.display='none';$('nav').style.display='none';}
 function authErr(m){$('authError').textContent=m;$('authInfo').textContent='';}
-function saveKey(){const k=$('keyInput').value.trim();if(!/^(sb_publishable_|eyJ)/.test(k))return toast('Ключ должен начинаться с sb_publishable_','err');localStorage.setItem('sb_key',k);location.reload();}
 
 async function doAuth(mode){
   authErr('');
@@ -418,9 +409,7 @@ function renderAll(){renderOps();if($('tab-analytics').classList.contains('activ
 function init(){
   applyTheme();
   if(!window.supabase){showAuth();authErr('Не удалось загрузить Supabase. Проверь интернет и обнови страницу.');return;}
-  const key=localStorage.getItem('sb_key')||'';
-  if(!key){showSetup();return;}
-  sb=supabase.createClient(SB_URL,key);
+  sb=supabase.createClient(SB_URL,SB_KEY);
   sb.auth.onAuthStateChange((ev,ses)=>{
     if(ses&&ses.user){if(!user||user.id!==ses.user.id){user=ses.user;enterApp();}}
     else{user=null;showAuth();}
