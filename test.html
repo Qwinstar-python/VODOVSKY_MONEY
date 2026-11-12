@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Проверка VODOVSKY</title>
+<style>
+body{font-family:sans-serif;background:#0A0C11;color:#F2F5FB;padding:24px;line-height:1.6}
+.ok{color:#31D08C;font-weight:bold}
+.bad{color:#FF6B6B;font-weight:bold}
+.wait{color:#FFDD2D}
+.box{background:#131722;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:18px;margin-bottom:14px}
+h1{font-size:20px;margin-bottom:16px}
+</style>
+</head>
+<body>
+<h1>VODOVSKY MONEY · Диагностика</h1>
+<div class="box" id="b1"><span class="wait">⏳ Загрузка библиотеки Supabase...</span></div>
+<div class="box" id="b2"><span class="wait">⏳ Чтение config.js...</span></div>
+<div class="box" id="b3"><span class="wait">⏳ Подключение к базе...</span></div>
+<div class="box" id="b4"><span class="wait">⏳ Проверка таблиц...</span></div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+(function(){
+  var b1=document.getElementById('b1');
+  var b2=document.getElementById('b2');
+  var b3=document.getElementById('b3');
+  var b4=document.getElementById('b4');
+
+  // 1. Библиотека
+  if(window.supabase && window.supabase.createClient){
+    b1.innerHTML='<span class="ok">✅ Библиотека Supabase загружена</span>';
+  } else {
+    b1.innerHTML='<span class="bad">❌ Библиотека Supabase НЕ загрузилась. Нет интернета или CDN заблокирован.</span>';
+    return;
+  }
+
+  // 2. Config
+  var cfg = window.VODOVSKY_CONFIG || {};
+  var sb = cfg.supabase || {};
+  var url = (sb.url||'').trim();
+  var key = (sb.anonKey||'').trim();
+  if(url && key && url.indexOf('http')===0){
+    b2.innerHTML='<span class="ok">✅ config.js прочитан. URL найден.</span><br><small style="color:#8E99B0">'+url+'</small>';
+  } else {
+    b2.innerHTML='<span class="bad">❌ config.js пустой или не найден. Нужно заполнить url и anonKey.</span>';
+    return;
+  }
+
+  // 3. Подключение
+  var client = window.supabase.createClient(url, key, {auth:{persistSession:false}});
+  
+  client.auth.getSession().then(function(res){
+    if(res.error){
+      b3.innerHTML='<span class="bad">❌ Ошибка подключения: '+res.error.message+'</span>';
+    } else {
+      b3.innerHTML='<span class="ok">✅ Supabase ответил. Связь есть.</span>' + (res.data.session ? '<br><small style="color:#8E99B0">Ты авторизован</small>' : '<br><small style="color:#8E99B0">Нужен вход (это нормально для теста)</small>');
+    }
+
+    // 4. Таблицы
+    var tables = ['profiles','transactions','goals','payments'];
+    var done = 0;
+    var results = [];
+    
+    tables.forEach(function(t){
+      client.from(t).select('*').limit(1).then(function(r){
+        if(r.error){
+          results.push('<span class="bad">❌ '+t+': '+r.error.message+'</span>');
+        } else {
+          results.push('<span class="ok">✅ '+t+' ('+r.data.length+' записей)</span>');
+        }
+        done++;
+        if(done === tables.length){
+          b4.innerHTML = results.join('<br>');
+        }
+      });
+    });
+
+  }).catch(function(e){
+    b3.innerHTML='<span class="bad">❌ Нет связи с Supabase. Проект уснул или неверный URL.</span>';
+    b4.innerHTML='<span class="bad">Ожидание подключения...</span>';
+  });
+
+})();
+</script>
+</body>
+</html>
